@@ -77,14 +77,17 @@ export default function App() {
           display: 'flex', justifyContent: 'space-between', gap: 28, alignItems: 'center',
           boxShadow: '0 20px 45px rgba(22,49,33,0.24)', flexWrap: 'wrap'
         }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, color: '#d6e7d3', marginBottom: 10 }}>
-              Shahi Kolabari Mahmudia Jame Mosque
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 18 }}>
+            <img src="/mosque-logo.svg" alt="Mosque logo" style={{ width: 102, height: 100, borderRadius: 18, boxShadow: '0 8px 20px rgba(0,0,0,0.18)', background: '#fff', padding: 6 }} />
+            <div>
+              <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.24em', fontWeight: 700, color: '#d6e7d3', marginBottom: 10 }}>
+                Madhya Beparipara Mohammadia Jame Masjid
+              </div>
+              <h1 style={{ fontSize: 34, fontWeight: 800, margin: 0, lineHeight: 1.2 }}>মধ্য বেপারীপাড়া মোহাম্মদিয়া  জামে মসজিদ</h1>
+              <p style={{ marginTop: 12, color: '#e9f5ea', maxWidth: 600, lineHeight: 1.6, fontSize: 15 }}>
+                প্রতিটি টাকার হিসাব, আপনার আস্থা
+              </p>
             </div>
-            <h1 style={{ fontSize: 34, fontWeight: 800, margin: 0, lineHeight: 1.2 }}>Mosque Finance Dashboard</h1>
-            <p style={{ marginTop: 12, color: '#e9f5ea', maxWidth: 600, lineHeight: 1.6, fontSize: 15 }}>
-              Transparent, real-time financial tracking for community donations, expenses, and monthly planning.
-            </p>
           </div>
           <div style={{
             background: 'rgba(255,255,255,0.95)', color: '#223041', borderRadius: 18,
