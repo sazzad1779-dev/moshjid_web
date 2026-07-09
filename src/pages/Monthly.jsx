@@ -37,8 +37,18 @@ export default function Monthly({ rows, summary }) {
   const dayByDay = useMemo(() => {
     const map = {}
     selTxns.forEach(r => {
-      if (!map[r.date]) map[r.date] = { date: r.date, income: 0, expense: 0 }
-      map[r.date][r.type] += r.amount
+      const dateValue = r.date
+      const parsedDate = new Date(dateValue)
+      const day = !Number.isNaN(parsedDate.getTime())
+        ? parsedDate.getDate()
+        : parseInt(String(dateValue), 10)
+
+      const label = !Number.isNaN(parsedDate.getTime())
+        ? `${parsedDate.getDate()}/${parsedDate.getMonth() + 1}`
+        : `${day}/${String(dateValue) || ''}`
+
+      if (!map[dateValue]) map[dateValue] = { date: dateValue, day, label, fullDate: formatDate(dateValue), income: 0, expense: 0 }
+      map[dateValue][r.type] += r.amount
     })
     return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
   }, [selTxns])
@@ -86,12 +96,12 @@ export default function Monthly({ rows, summary }) {
         <ResponsiveContainer width="100%" height={260}>
           <ComposedChart data={dayByDay}>
             <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
-            <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8898aa' }} tickFormatter={d => d.slice(-2)} />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8898aa' }} />
             <YAxis tick={{ fontSize: 11, fill: '#8898aa' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
             <Tooltip
               contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
               formatter={v => formatTaka(v)}
-              labelFormatter={l => `Date: ${l}`}
+              labelFormatter={(label, payload) => `Date: ${payload?.[0]?.payload?.fullDate || label}`}
             />
             <Legend />
             <Bar dataKey="income" fill={COLORS.income} radius={[4, 4, 0, 0]} name="Income" barSize={16} />
