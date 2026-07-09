@@ -10,7 +10,7 @@ export function useTransactions() {
   const fetchData = useCallback(async () => {
     setStatus('loading')
     try {
-      const res = await fetch('/api/transactions')
+      const res = await fetch('/api/transactions', { cache: 'no-store' })
       const data = await res.json()
 
       if (!res.ok) {
@@ -34,6 +34,12 @@ export function useTransactions() {
 
   useEffect(() => {
     fetchData()
+
+    const intervalId = window.setInterval(() => {
+      fetchData()
+    }, 15000)
+
+    return () => window.clearInterval(intervalId)
   }, [fetchData])
 
   const summary = computeSummary(rows)

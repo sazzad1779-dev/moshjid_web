@@ -29,7 +29,9 @@ export default async function handler(req, res) {
 
     const rows = parseRows(parsed.data)
 
-    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.setHeader('Pragma', 'no-cache')
+    res.setHeader('Expires', '0')
     res.setHeader('Content-Type', 'application/json')
     res.status(200).json({ rows, count: rows.length, updatedAt: new Date().toISOString() })
   } catch (err) {
