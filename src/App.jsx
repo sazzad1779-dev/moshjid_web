@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Monthly from './pages/Monthly.jsx'
 import Transactions from './pages/Transactions.jsx'
 import About from './pages/About.jsx'
+import Admin from './pages/Admin.jsx'
 import { formatTaka } from './utils/formatters.js'
 import { TAB_ICONS } from './constants.js'
 
@@ -14,6 +15,8 @@ const TABS = [
   { id: 'monthly', label: 'Monthly',   desc: 'Finance' },
   { id: 'transactions', label: 'Transactions', desc: 'All Records' },
   { id: 'about',   label: 'About',     desc: 'Info' },
+  { id: 'admin', label: 'Admin', desc: 'Private' },
+  
 ]
 
 export default function App() {
@@ -60,6 +63,7 @@ export default function App() {
       case 'monthly': return <Monthly {...props} />
       case 'transactions': return <Transactions {...props} />
       case 'about': return <About />
+      case 'admin': return <Admin />
       default: return <Home {...props} />
     }
   }
@@ -130,6 +134,11 @@ export default function App() {
 
         {/* Content */}
         <main className="tab-content">{tabContent()}</main>
+
+        <footer style={{ textAlign: 'center', paddingTop: 8, color: '#6b7280', fontSize: 11, lineHeight: 1.7 }}>
+          <div>“Built with care to keep community finances transparent, simple, and trustworthy.”</div>
+          <div style={{ marginTop: 4, color: '#1d4f2f', fontWeight: 700 }}>— Md. Sazzad Hossain</div>
+        </footer>
 
       </div>
     </div>

@@ -8,7 +8,7 @@ export const COLORS = {
 }
 
 export const TAB_ICONS = {
-  home: '🏠', dashboard: '📊', monthly: '📅', transactions: '📋', about: 'ℹ️'
+  home: '🏠', dashboard: '📊', monthly: '📅', transactions: '📋', admin: '🔐', about: 'ℹ️'
 }
 
 export const KPI_META = [
