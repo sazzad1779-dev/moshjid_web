@@ -14,16 +14,6 @@ const QUICK_LINKS = [
     url: import.meta.env.VITE_INCOME_FORM_URL || '#',
     desc: 'Google form for monthly income collection',
   },
-  {
-    title: 'Member Collection Sheet',
-    url: import.meta.env.VITE_MEMBER_SHEET_URL || '#',
-    desc: 'Member-wise collection tracker',
-  },
-  {
-    title: 'Expense Entry Form',
-    url: import.meta.env.VITE_EXPENSE_FORM_URL || '#',
-    desc: 'Submit new expense entries',
-  },
 ]
 
 const NOTES = [
@@ -107,7 +97,7 @@ function LoginScreen({ onLogin, error }) {
 }
 
 // ── Collector Dashboard ──
-function CollectorDashboard({ data }) {
+function CollectorDashboard({ data, onLogout }) {
   if (!data?.collectors) return <div style={{ color: '#8898aa', textAlign: 'center', padding: 40 }}>No data</div>
 
   const myName = data.collectors[0]?.name || 'Unknown'
@@ -116,6 +106,15 @@ function CollectorDashboard({ data }) {
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       <ChartShell title={`Collector: ${myName}`} subtitle="Your collection summary">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+          <div style={{ color: '#5f6b7a', fontSize: 14 }}>View your collection summary and recent entries.</div>
+          <button onClick={onLogout} style={{
+            border: '1px solid #d5dde5', borderRadius: 10, padding: '10px 16px',
+            background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#c62828', fontSize: 13
+          }}>
+            Sign Out
+          </button>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
           <div style={{ background: '#f8fafc', borderRadius: 14, padding: '18px 20px', border: '1px solid #eef2f5' }}>
             <div style={{ fontSize: 11, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Income</div>
@@ -280,7 +279,7 @@ export default function Admin() {
 
   // Collector sees only their own data
   if (role === 'collector') {
-    return <CollectorDashboard data={data} />
+    return <CollectorDashboard data={data} onLogout={logout} />
   }
 
   // Admin sees everything
