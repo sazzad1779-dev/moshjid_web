@@ -104,16 +104,51 @@ export function getMonthCategoryBreakdown(rows, monthKey) {
     .sort((a, b) => b.amount - a.amount)
 }
 
+function normalizeText(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
+function parseDateValue(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+
+  const isoMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch
+    return new Date(Number(year), Number(month) - 1, Number(day))
+  }
+
+  const slashMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/)
+  if (slashMatch) {
+    const [, first, second, yearPart] = slashMatch
+    const year = Number(yearPart.length === 2 ? 2000 + Number(yearPart) : yearPart)
+    const firstNum = Number(first)
+    const secondNum = Number(second)
+    const isDayFirst = firstNum <= 31 && secondNum <= 12
+    const day = isDayFirst ? firstNum : secondNum
+    const month = isDayFirst ? secondNum : firstNum
+    return new Date(year, month - 1, day)
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 export function filterTransactions(rows, { search, type, category, dateStart, dateEnd }) {
-  return rows.filter(r => {
-    const matchesSearch = !search || 
-      r.category.toLowerCase().includes(search.toLowerCase()) ||
-      r.note.toLowerCase().includes(search.toLowerCase()) ||
-      r.date.includes(search)
+  const normalizedSearch = normalizeText(search)
+  const startDate = parseDateValue(dateStart)
+  const endDate = parseDateValue(dateEnd)
+
+  return rows.filter((r) => {
+    const rowDate = parseDateValue(r.date)
+    const matchesSearch = !normalizedSearch ||
+      normalizeText(r.category).includes(normalizedSearch) ||
+      normalizeText(r.note).includes(normalizedSearch) ||
+      normalizeText(r.date).includes(normalizedSearch)
     const matchesType = type === 'all' || r.type === type
     const matchesCategory = category === 'all' || r.category === category
-    const matchesDate = (!dateStart || r.date >= dateStart) && 
-                        (!dateEnd || r.date <= dateEnd)
+    const matchesDate = (!startDate || (rowDate && rowDate >= startDate)) &&
+      (!endDate || (rowDate && rowDate <= endDate))
     return matchesSearch && matchesType && matchesCategory && matchesDate
   }).sort((a, b) => new Date(b.date) - new Date(a.date))
 }

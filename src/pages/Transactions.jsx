@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react'
 import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell
 } from 'recharts'
 import ChartShell from '../components/ChartShell.jsx'
@@ -37,10 +37,11 @@ export default function Transactions({ rows, summary, categories }) {
   }
 
   const { stats, dailyData } = summary
+  const hasDailyData = Array.isArray(dailyData) && dailyData.length > 0
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
-      <ChartShell title="All Transactions" subtitle="Search, filter, and browse complete financial records">
+      <ChartShell title="Transaction Filters" subtitle="Search, filter, and browse complete financial records">
         <TransactionFilters
           search={search} onSearchChange={v => { setSearch(v); setCurrentPage(1) }}
           type={type} onTypeChange={v => { setType(v); setCurrentPage(1) }}
@@ -49,8 +50,50 @@ export default function Transactions({ rows, summary, categories }) {
           dateStart={dateStart} onDateStartChange={v => { setDateStart(v); setCurrentPage(1) }}
           dateEnd={dateEnd} onDateEndChange={v => { setDateEnd(v); setCurrentPage(1) }}
         />
+      </ChartShell>
 
-        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+        <ChartShell title="Daily Activity Pattern" subtitle="Net flow per day">
+          <ResponsiveContainer width="100%" height={250}>
+            {hasDailyData ? (
+              <BarChart data={dailyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8898aa' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#8898aa' }} tickFormatter={v => '৳' + (Math.abs(v) / 1000).toFixed(0) + 'k'} />
+                <Tooltip formatter={v => formatTaka(v)} cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }} />
+                <Bar dataKey="net" radius={[6, 6, 0, 0]}>
+                  {dailyData.map((entry, index) => (
+                    <Cell key={`${entry.date}-${index}`} fill={entry.net >= 0 ? COLORS.income : COLORS.expense} />
+                  ))}
+                </Bar>
+              </BarChart>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8898aa', fontSize: 14 }}>
+                No activity has been recorded yet.
+              </div>
+            )}
+          </ResponsiveContainer>
+        </ChartShell>
+
+        <ChartShell title="Summary Statistics" subtitle="Aggregated insights">
+          <div style={{ display: 'grid', gap: 12 }}>
+            {[
+              { label: 'Highest Income', value: formatTaka(stats.highestIncome), color: COLORS.income },
+              { label: 'Highest Expense', value: formatTaka(stats.highestExpense), color: COLORS.expense },
+              { label: 'Average Transaction', value: formatTaka(stats.avgTransaction), color: COLORS.balance },
+              { label: 'Date Range', value: stats.dateRange ? `${formatDate(stats.dateRange.start)} — ${formatDate(stats.dateRange.end)}` : 'N/A', color: COLORS.accent },
+            ].map((s, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 3 ? '1px solid #eef2f5' : 'none' }}>
+                <span style={{ color: '#5f6b7a', fontSize: 14 }}>{s.label}</span>
+                <strong style={{ color: s.color, fontSize: 15 }}>{s.value}</strong>
+              </div>
+            ))}
+          </div>
+        </ChartShell>
+      </div>
+
+      <ChartShell title="Transaction Records" subtitle="Browse all transactions with pagination">
+        <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ color: '#8898aa', fontSize: 14 }}>Showing {filtered.length} records</span>
           <button onClick={handleClear} style={{ border: '1px solid #dfe6ea', background: '#fff', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: '#5f6b7a', fontWeight: 600, fontSize: 13 }}>
             Clear Filters
@@ -71,38 +114,6 @@ export default function Transactions({ rows, summary, categories }) {
 
         <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
       </ChartShell>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        <ChartShell title="Daily Activity Pattern" subtitle="Net flow per day">
-          <ResponsiveContainer width="100%" height={250}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8898aa' }} />
-              <YAxis tick={{ fontSize: 12, fill: '#8898aa' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
-              <Tooltip formatter={v => formatTaka(v)} cursor={{ strokeDasharray: '3 3' }} />
-              <Scatter data={dailyData} name="Net Flow">
-                {dailyData.map((e, i) => <Cell key={i} fill={e.net >= 0 ? COLORS.income : COLORS.expense} />)}
-              </Scatter>
-            </ScatterChart>
-          </ResponsiveContainer>
-        </ChartShell>
-
-        <ChartShell title="Summary Statistics" subtitle="Aggregated insights">
-          <div style={{ display: 'grid', gap: 12 }}>
-            {[
-              { label: 'Highest Income', value: formatTaka(stats.highestIncome), color: COLORS.income },
-              { label: 'Highest Expense', value: formatTaka(stats.highestExpense), color: COLORS.expense },
-              { label: 'Average Transaction', value: formatTaka(stats.avgTransaction), color: COLORS.balance },
-              { label: 'Date Range', value: stats.dateRange ? `${formatDate(stats.dateRange.start)} — ${formatDate(stats.dateRange.end)}` : 'N/A', color: COLORS.accent },
-            ].map((s, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 3 ? '1px solid #eef2f5' : 'none' }}>
-                <span style={{ color: '#5f6b7a', fontSize: 14 }}>{s.label}</span>
-                <strong style={{ color: s.color, fontSize: 15 }}>{s.value}</strong>
-              </div>
-            ))}
-          </div>
-        </ChartShell>
-      </div>
     </div>
   )
 }
