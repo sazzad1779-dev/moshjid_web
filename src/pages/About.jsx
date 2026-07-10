@@ -13,22 +13,14 @@ const ARCH = [
 export default function About() {
   return (
     <div style={{ display: 'grid'}}>
-      <div style={{ display: 'grid',  gap: 20  }}>
-        <ChartShell title="About the Mosque Finance System">
+      <div style={{ display: 'grid',  gap: 20  ,padding: 20, background: '#f4f8f1', borderRadius: 12 }}>
+        <ChartShell title="Mission">
           <div style={{ color: '#5f6b7a',gap: 12, display: 'grid', lineHeight: 1.7 }}>
             <p style={{ marginTop: 0 }}>
-              This platform helps mosque administrators present finances in a clean, trustworthy, and modern way.
-              It combines live transaction data with elegant charts and clear summaries.
-            </p>
-            <h3 style={{ color: '#1d4f2f', marginTop: 24, marginBottom: 12 }}>Key Features</h3>
-            <ul style={{ paddingLeft: 20, margin: 0 }}>
-              <li style={{ marginBottom: 8 }}><strong>Real-time Sync:</strong> Connects directly to Google Sheets for live data updates</li>
-              <li style={{ marginBottom: 8 }}><strong>Multi-tab Navigation:</strong> Home, Dashboard, Monthly, Transactions, About</li>
-              <li style={{ marginBottom: 8 }}><strong>Advanced Filtering:</strong> Search, date range, category, and type filters</li>
-              <li style={{ marginBottom: 8 }}><strong>Visual Analytics:</strong> Pie charts, bar charts, trend lines, radar charts</li>
-              <li style={{ marginBottom: 8 }}><strong>Bengali Support:</strong> Column headers and categories support Bengali text</li>
-              <li style={{ marginBottom: 8 }}><strong>Responsive Design:</strong> Works on mobile, tablet, and desktop</li>
-            </ul>
+              Support transparent reporting and better financial planning for charitable and community services.
+              Every donation and expense is tracked with accountability.
+               </p>
+           
           </div>
         </ChartShell>
       </div>
