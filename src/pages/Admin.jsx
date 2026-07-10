@@ -86,10 +86,7 @@ function LoginScreen({ onLogin, error }) {
             </div>
           )}
 
-          <div style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: '#8898aa' }}>
-            Need access? Contact{' '}
-            <a href={`mailto:${CONTACT_EMAIL}`} style={{ color: '#1d4f2f', fontWeight: 700 }}>{CONTACT_EMAIL}</a>
-          </div>
+
         </div>
       </ChartShell>
     </div>
