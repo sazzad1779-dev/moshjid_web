@@ -126,7 +126,7 @@ export default function Dashboard({ rows, summary }) {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={expenseByCat} dataKey="amount" nameKey="category" outerRadius={90} innerRadius={55}
-                paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}>
+                paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`} className="pie-labels">
                 {expenseByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={2} />)}
               </Pie>
               <Tooltip formatter={v => formatTaka(v)} />
@@ -139,7 +139,7 @@ export default function Dashboard({ rows, summary }) {
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>
               <Pie data={incomeByCat} dataKey="amount" nameKey="category" outerRadius={90} innerRadius={55}
-                paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`}>
+                paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`} className="pie-labels">
                 {incomeByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={2} />)}
               </Pie>
               <Tooltip formatter={v => formatTaka(v)} />
@@ -148,6 +148,13 @@ export default function Dashboard({ rows, summary }) {
           </ResponsiveContainer>
         </ChartShell>
       </div>
+
+      <style>{`
+        .pie-labels text {
+          font-size: 9px;
+          font-weight: 600;
+        }
+      `}</style>
 
       {/* ── Row 4: Category Summary Table (inventive) ── */}
       <ChartShell title="Category Performance" subtitle="Income, expense & net per category">
