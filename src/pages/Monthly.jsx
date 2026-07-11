@@ -50,7 +50,7 @@ export default function Monthly({ rows, summary }) {
       if (!map[dateValue]) map[dateValue] = { date: dateValue, day, label, fullDate: formatDate(dateValue), income: 0, expense: 0 }
       map[dateValue][r.type] += r.amount
     })
-    return Object.values(map).sort((a, b) => a.date.localeCompare(b.date))
+    return Object.values(map).sort((a, b) => a.day - b.day)
   }, [selTxns])
 
   // ---- health metrics ----

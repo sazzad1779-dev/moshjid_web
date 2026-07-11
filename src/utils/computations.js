@@ -1,6 +1,6 @@
 export function toMonthKey(date) {
-  const d = new Date(date)
-  if (isNaN(d)) return ''
+  const d = parseDateValue(date)
+  if (!d) return ''
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
@@ -56,7 +56,11 @@ export function computeSummary(rows) {
     byDate[r.date].net = byDate[r.date].income - byDate[r.date].expense
   })
 
-  const dailyData = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date))
+  const dailyData = Object.values(byDate).sort((a, b) => {
+    const da = parseDateValue(a.date)
+    const db = parseDateValue(b.date)
+    return (da?.getTime() || 0) - (db?.getTime() || 0)
+  })
 
   const incomeRows = rows.filter(r => r.type === 'income')
   const expenseRows = rows.filter(r => r.type === 'expense')
@@ -70,10 +74,10 @@ export function computeSummary(rows) {
     incomeCount: incomeRows.length,
     expenseCount: expenseRows.length,
     categoryCount: new Set(rows.map(r => r.category)).size,
-    dateRange: rows.length ? {
-      start: rows.reduce((a, b) => a.date < b.date ? a : b).date,
-      end: rows.reduce((a, b) => a.date > b.date ? a : b).date
-    } : null
+    dateRange: rows.length ? (() => {
+      const sorted = [...rows].sort((a, b) => (parseDateValue(a.date)?.getTime() || 0) - (parseDateValue(b.date)?.getTime() || 0))
+      return { start: sorted[0].date, end: sorted[sorted.length - 1].date }
+    })() : null
   }
 
   return { 
@@ -112,32 +116,54 @@ function parseDateValue(value) {
   const raw = String(value ?? '').trim()
   if (!raw) return null
 
-  const isoMatch = raw.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
+  // Strip any trailing time component (e.g. "10/7/2026 12:00:00 AM" → "10/7/2026")
+  const dateOnly = raw.split(/[ T]/)[0]
+  if (!dateOnly) return null
+
+  // ISO format YYYY-MM-DD or YYYY/MM/DD
+  const isoMatch = dateOnly.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/)
   if (isoMatch) {
     const [, year, month, day] = isoMatch
     return new Date(Number(year), Number(month) - 1, Number(day))
   }
 
-  const slashMatch = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/)
+  // M/D/YYYY or D/M/YYYY
+  const slashMatch = dateOnly.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/)
   if (slashMatch) {
     const [, first, second, yearPart] = slashMatch
     const year = Number(yearPart.length === 2 ? 2000 + Number(yearPart) : yearPart)
     const firstNum = Number(first)
     const secondNum = Number(second)
-    const isDayFirst = firstNum <= 31 && secondNum <= 12
-    const day = isDayFirst ? firstNum : secondNum
-    const month = isDayFirst ? secondNum : firstNum
+
+    let month, day
+    if (firstNum > 12) {
+      // First > 12 → must be day → D/M
+      day = firstNum
+      month = secondNum
+    } else if (secondNum > 12) {
+      // Second > 12 → must be day → M/D
+      day = secondNum
+      month = firstNum
+    } else {
+      // Both ≤ 12 — assume M/D (Google Sheets US format)
+      month = firstNum
+      day = secondNum
+    }
     return new Date(year, month - 1, day)
   }
 
+  // Fallback: try native parsing, then normalize to midnight
   const parsed = new Date(raw)
-  return Number.isNaN(parsed.getTime()) ? null : parsed
+  if (Number.isNaN(parsed.getTime())) return null
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate())
 }
 
 export function filterTransactions(rows, { search, type, category, dateStart, dateEnd }) {
   const normalizedSearch = normalizeText(search)
   const startDate = parseDateValue(dateStart)
-  const endDate = parseDateValue(dateEnd)
+  const endDateRaw = parseDateValue(dateEnd)
+  // Make endDate inclusive: set to 23:59:59.999 so same-day transactions match
+  const endDate = endDateRaw ? new Date(endDateRaw.getTime() + 86400000 - 1) : null
 
   return rows.filter((r) => {
     const rowDate = parseDateValue(r.date)

@@ -9,7 +9,7 @@ import StatusDot from '../components/StatusDot.jsx'
 import TransactionFilters from '../components/TransactionFilters.jsx'
 import Pagination from '../components/Pagination.jsx'
 import { formatTaka, formatDate } from '../utils/formatters.js'
-import { filterTransactions } from '../utils/computations.js'
+import { filterTransactions, computeSummary } from '../utils/computations.js'
 import { COLORS } from '../constants.js'
 
 const PAGE_SIZE = 10
@@ -26,18 +26,32 @@ export default function Transactions({ rows, summary, categories }) {
     filterTransactions(rows, { search, type, category, dateStart, dateEnd }),
     [rows, search, type, category, dateStart, dateEnd])
 
+  // Default: when no date filter is set, show last 30 days in charts/stats
+  const defaultDateStart = useMemo(() => {
+    if (dateStart || dateEnd) return ''
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().split('T')[0]
+  }, [dateStart, dateEnd])
+
+  const chartDateStart = dateStart || defaultDateStart
+  const chartFiltered = useMemo(() =>
+    filterTransactions(rows, { search, type, category, dateStart: chartDateStart, dateEnd }),
+    [rows, search, type, category, chartDateStart, dateEnd])
+
   const paginated = useMemo(() =>
     filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
     [filtered, currentPage])
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
 
+  const chartSummary = useMemo(() => computeSummary(chartFiltered), [chartFiltered])
+  const { stats, dailyData } = chartSummary
+  const hasDailyData = Array.isArray(dailyData) && dailyData.length > 0
+
   const handleClear = () => {
     setSearch(''); setType('all'); setCategory('all'); setDateStart(''); setDateEnd(''); setCurrentPage(1)
   }
-
-  const { stats, dailyData } = summary
-  const hasDailyData = Array.isArray(dailyData) && dailyData.length > 0
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
