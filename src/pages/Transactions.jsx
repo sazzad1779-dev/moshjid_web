@@ -7,6 +7,7 @@ import ChartShell from '../components/ChartShell.jsx'
 import TableShell from '../components/TableShell.jsx'
 import StatusDot from '../components/StatusDot.jsx'
 import TransactionFilters from '../components/TransactionFilters.jsx'
+import CategorySummary from '../components/CategorySummary.jsx'
 import Pagination from '../components/Pagination.jsx'
 import { formatTaka, formatDate } from '../utils/formatters.js'
 import { filterTransactions, computeSummary } from '../utils/computations.js'
@@ -105,6 +106,8 @@ export default function Transactions({ rows, summary, categories }) {
           </div>
         </ChartShell>
       </div>
+
+      <CategorySummary rows={filtered} selectedType={type} />
 
       <ChartShell title="Transaction Records" subtitle="Browse all transactions with pagination">
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
