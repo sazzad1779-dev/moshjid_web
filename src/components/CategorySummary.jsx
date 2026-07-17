@@ -3,7 +3,9 @@ import ChartShell from './ChartShell.jsx'
 import { formatTaka } from '../utils/formatters.js'
 import { COLORS } from '../constants.js'
 
-export default function CategorySummary({ rows, selectedType }) {
+export default function CategorySummary({ rows, selectedType, dateStart, dateEnd }) {
+  const typeLabel = selectedType === 'all' ? 'All Types' : selectedType === 'income' ? 'Income' : 'Expense'
+
   const breakdown = useMemo(() => {
     const map = {}
 
@@ -38,8 +40,23 @@ export default function CategorySummary({ rows, selectedType }) {
     return totals
   }, [breakdown])
 
+  const rangeText = useMemo(() => {
+    if (dateStart && dateEnd) return `${dateStart} to ${dateEnd}`
+    if (dateStart) return `From ${dateStart}`
+    if (dateEnd) return `Until ${dateEnd}`
+    return 'Last 30 days'
+  }, [dateStart, dateEnd])
+
   return (
-    <ChartShell title="Category-wise Summary" subtitle={selectedType === 'all' ? 'Income & expense breakdown by category' : `${selectedType} breakdown by category`}>
+    <ChartShell
+      title="Category-wise Summary"
+      subtitle={
+        <span>
+          <strong style={{ textTransform: 'capitalize' }}>{typeLabel}</strong>
+          {' '}· {rangeText} · {rows.length} transaction{rows.length !== 1 ? 's' : ''}
+        </span>
+      }
+    >
       {breakdown.length === 0 ? (
         <div style={{ padding: '32px 0', textAlign: 'center', color: '#8898aa', fontSize: 14 }}>
           No data available for the selected filters.

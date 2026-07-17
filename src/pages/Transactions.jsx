@@ -107,7 +107,7 @@ export default function Transactions({ rows, summary, categories }) {
         </ChartShell>
       </div>
 
-      <CategorySummary rows={filtered} selectedType={type} />
+      <CategorySummary rows={filtered} selectedType={type} dateStart={dateStart} dateEnd={dateEnd} />
 
       <ChartShell title="Transaction Records" subtitle="Browse all transactions with pagination">
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
