@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     if (GOOGLE_API_KEY && SHEET_ID) {
       const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(normalizeRange(SHEET_RANGE))}?key=${GOOGLE_API_KEY}`
-      const upstream = await fetch(sheetUrl)
+      const upstream = await fetch(sheetUrl, { signal: AbortSignal.timeout(8000) })
 
       if (!upstream.ok) {
         throw new Error(`Google Sheets API returned ${upstream.status}`)
@@ -51,7 +51,8 @@ export default async function handler(req, res) {
       rows = parseRows(toObjectRows(data.values || []))
     } else {
       const upstream = await fetch(CSV_URL, {
-        headers: { Accept: 'text/csv' }
+        headers: { Accept: 'text/csv' },
+        signal: AbortSignal.timeout(8000)
       })
 
       if (!upstream.ok) {
@@ -68,7 +69,7 @@ export default async function handler(req, res) {
       rows = parseRows(parsed.data)
     }
 
-    res.setHeader('Cache-Control', 'public, s-maxage=10, stale-while-revalidate=30')
+    res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
     res.setHeader('Content-Type', 'application/json')
     res.status(200).json({ rows, count: rows.length, updatedAt: new Date().toISOString() })
   } catch (err) {

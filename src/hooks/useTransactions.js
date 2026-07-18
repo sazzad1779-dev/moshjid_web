@@ -9,26 +9,26 @@ export function useTransactions() {
 
   const fetchData = useCallback(async () => {
     setStatus('loading')
-    try {
-      const res = await fetch('/api/transactions')
-      const data = await res.json()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch('/api/transactions', { signal: AbortSignal.timeout(12000) })
+        const data = await res.json()
 
-      if (!res.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`)
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+        if (data.error) throw new Error(data.error)
+
+        setRows(data.rows || [])
+        setLastUpdated(data.updatedAt ? new Date(data.updatedAt) : new Date())
+        setStatus('ready')
+        setError(null)
+        return
+      } catch (err) {
+        if (attempt === 1) {
+          setError(err.message)
+          setStatus('error')
+          console.error('Failed to fetch transactions:', err)
+        }
       }
-
-      if (data.error) {
-        throw new Error(data.error)
-      }
-
-      setRows(data.rows || [])
-      setLastUpdated(data.updatedAt ? new Date(data.updatedAt) : new Date())
-      setStatus('ready')
-      setError(null)
-    } catch (err) {
-      setError(err.message)
-      setStatus('error')
-      console.error('Failed to fetch transactions:', err)
     }
   }, [])
 
@@ -39,13 +39,13 @@ export function useTransactions() {
   const summary = computeSummary(rows)
   const categories = [...new Set(rows.map(r => r.category))].sort()
 
-  return { 
-    rows, 
-    status, 
-    error, 
-    summary, 
-    categories, 
+  return {
+    rows,
+    status,
+    error,
+    summary,
+    categories,
     lastUpdated,
-    refetch: fetchData 
+    refetch: fetchData
   }
 }
