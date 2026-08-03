@@ -7,9 +7,10 @@ app.use(express.json())
 
 // Dynamically load all api handlers
 const handlers = {
-  transactions: (await import('./api/transactions.js')).default,
-  auth:         (await import('./api/auth.js')).default,
-  collectors:   (await import('./api/collectors.js')).default,
+  transactions:    (await import('./api/transactions.js')).default,
+  auth:            (await import('./api/auth.js')).default,
+  collectors:      (await import('./api/collectors.js')).default,
+  'add-transaction': (await import('./api/add-transaction.js')).default,
 }
 
 for (const [name, handler] of Object.entries(handlers)) {
