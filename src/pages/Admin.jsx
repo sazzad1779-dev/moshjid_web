@@ -5,23 +5,130 @@ import { useCollectorData } from '../hooks/useCollectorData.js'
 import { formatTaka } from '../utils/formatters.js'
 import { COLORS } from '../constants.js'
 
-// ── Config (from env) ──
-const CONTACT_EMAIL = import.meta.env.VITE_ADMIN_CONTACT_EMAIL || 'admin@mosque.com'
-
-const QUICK_LINKS = [
-  {
-    title: 'Income Collection Form',
-    url: import.meta.env.VITE_INCOME_FORM_URL || '#',
-    desc: 'Google form for monthly income collection',
-  },
-]
+const INCOME_CATEGORIES = ['Regular Donation', 'Friday Collection', 'Zakat', 'Sadaqah', 'Special Donation', 'Other Income']
+const EXPENSE_CATEGORIES = ['Electricity Bill', 'Water Bill', 'Maintenance', 'Salary', 'Cleaning', 'Stationery', 'Other Expense']
+const PAYMENT_METHODS = ['Cash (নগদ)', 'Bank Transfer (ব্যাংক ট্রান্সফার)', 'bKash (বিকাশ)', 'Nagad (নগদ)', 'Rocket (রকেট)', 'Check (চেক)']
 
 const NOTES = [
-  'Keep all online collection screenshots in the shared folder after every submission.',
   'Confirm the member list before publishing any collection summary.',
-  'Use the official form to avoid duplicate entries and mismatch in records.',
   'Never share your PIN with anyone. Contact admin if you suspect compromise.',
 ]
+
+const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: '#506174', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }
+
+// ── Transaction Form ──
+function TransactionForm({ enteredBy }) {
+  const empty = { date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '', paymentMethod: 'Cash (নগদ)', notes: '' }
+  const [form, setForm] = useState(empty)
+  const [status, setStatus] = useState(null)
+  const [errMsg, setErrMsg] = useState('')
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const categories = form.type === 'income' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setStatus('loading')
+    setErrMsg('')
+    try {
+      const res = await fetch('/api/add-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, enteredBy })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to save')
+      setStatus('success')
+      setForm(empty)
+      setTimeout(() => setStatus(null), 3000)
+    } catch (err) {
+      setErrMsg(err.message)
+      setStatus('error')
+    }
+  }
+
+  const inp = (extra = {}) => ({
+    style: { padding: '11px 14px', borderRadius: 10, border: '1px solid #d5dde5', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff' },
+    onFocus: e => e.target.style.borderColor = '#1d4f2f',
+    onBlur: e => e.target.style.borderColor = '#d5dde5',
+    ...extra
+  })
+
+  return (
+    <ChartShell title="Add Transaction" subtitle="লেনদেন যোগ করুন">
+      <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14, maxWidth: 600 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={lbl}>Date / তারিখ *</label>
+            <input type="date" required value={form.date} onChange={e => set('date', e.target.value)} {...inp()} />
+          </div>
+          <div>
+            <label style={lbl}>Type / ধরন *</label>
+            <select required value={form.type} onChange={e => { set('type', e.target.value); set('category', '') }} {...inp()}>
+              <option value="income">Income (জমা)</option>
+              <option value="expense">Expense (খরচ)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={lbl}>Category / ক্যাটাগরি *</label>
+          <select required value={form.category} onChange={e => set('category', e.target.value)} {...inp()}>
+            <option value="">— Select —</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <label style={lbl}>Description / বিবরণ *</label>
+          <input type="text" required placeholder="e.g. Friday donation" value={form.description} onChange={e => set('description', e.target.value)} {...inp()} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div>
+            <label style={lbl}>Amount (Taka) / পরিমাণ *</label>
+            <input type="number" required min="1" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} {...inp()} />
+          </div>
+          <div>
+            <label style={lbl}>Payment Method *</label>
+            <select required value={form.paymentMethod} onChange={e => set('paymentMethod', e.target.value)} {...inp()}>
+              {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={lbl}>Additional Notes / অতিরিক্ত মন্তব্য</label>
+          <textarea rows={2} placeholder="Optional extra details…" value={form.notes} onChange={e => set('notes', e.target.value)}
+            style={{ padding: '11px 14px', borderRadius: 10, border: '1px solid #d5dde5', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: '#fff' }}
+            onFocus={e => e.target.style.borderColor = '#1d4f2f'}
+            onBlur={e => e.target.style.borderColor = '#d5dde5'}
+          />
+        </div>
+
+        <button type="submit" disabled={status === 'loading'} style={{
+          border: 'none', borderRadius: 12, padding: '13px 20px',
+          background: status === 'loading' ? '#a0b0a0' : '#1d4f2f',
+          color: '#fff', fontWeight: 700, cursor: status === 'loading' ? 'wait' : 'pointer', fontSize: 15
+        }}>
+          {status === 'loading' ? 'Saving…' : 'Save Transaction'}
+        </button>
+
+        {status === 'success' && (
+          <div style={{ padding: '12px 14px', background: '#e8f5e9', borderRadius: 10, color: '#2E7D32', fontWeight: 600, fontSize: 13 }}>
+            ✅ Transaction saved successfully!
+          </div>
+        )}
+        {status === 'error' && (
+          <div style={{ padding: '12px 14px', background: '#ffebee', borderRadius: 10, color: '#c62828', fontWeight: 600, fontSize: 13 }}>
+            ❌ {errMsg}
+          </div>
+        )}
+      </form>
+    </ChartShell>
+  )
+}
 
 // ── Login Screen ──
 function LoginScreen({ onLogin, error }) {
@@ -85,8 +192,6 @@ function LoginScreen({ onLogin, error }) {
               {error}
             </div>
           )}
-
-
         </div>
       </ChartShell>
     </div>
@@ -128,6 +233,8 @@ function CollectorDashboard({ data, onLogout }) {
         </div>
       </ChartShell>
 
+      <TransactionForm enteredBy={myName} />
+
       <ChartShell title="Your Transactions" subtitle="Recent entries you recorded">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
@@ -164,10 +271,9 @@ function AdminDashboard({ data, onLogout }) {
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
-      {/* Header */}
       <ChartShell title="Admin Panel" subtitle="Full mosque administration">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ color: '#5f6b7a', fontSize: 14 }}>Manage collectors, view all collections, and access admin resources.</div>
+          <div style={{ color: '#5f6b7a', fontSize: 14 }}>Manage collectors, view all collections, and add transactions.</div>
           <button onClick={onLogout} style={{
             border: '1px solid #d5dde5', borderRadius: 10, padding: '10px 16px',
             background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#c62828', fontSize: 13
@@ -179,23 +285,20 @@ function AdminDashboard({ data, onLogout }) {
 
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
-          <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>Collectors</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: '#213143', marginTop: 8 }}>{collectors.length}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
-          <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>Total Income</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.income, marginTop: 8 }}>{formatTaka(totalIncome)}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
-          <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>Total Expense</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: COLORS.expense, marginTop: 8 }}>{formatTaka(totalExpense)}</div>
-        </div>
-        <div style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
-          <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>Balance</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: totalIncome >= totalExpense ? COLORS.balance : COLORS.expense, marginTop: 8 }}>{formatTaka(totalIncome - totalExpense)}</div>
-        </div>
+        {[
+          { label: 'Collectors', value: collectors.length, color: '#213143' },
+          { label: 'Total Income', value: formatTaka(totalIncome), color: COLORS.income },
+          { label: 'Total Expense', value: formatTaka(totalExpense), color: COLORS.expense },
+          { label: 'Balance', value: formatTaka(totalIncome - totalExpense), color: totalIncome >= totalExpense ? COLORS.balance : COLORS.expense },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
+            <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 8 }}>{k.value}</div>
+          </div>
+        ))}
       </div>
+
+      <TransactionForm enteredBy="Admin" />
 
       {/* Collector-wise Summary */}
       <ChartShell title="Collector-wise Collections" subtitle="Summary by person">
@@ -221,26 +324,6 @@ function AdminDashboard({ data, onLogout }) {
         </div>
       </ChartShell>
 
-      {/* Quick Links */}
-      <ChartShell title="Quick Links" subtitle="Admin resources">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
-          {QUICK_LINKS.map(link => (
-            <a key={link.title} href={link.url} target="_blank" rel="noreferrer" style={{
-              background: '#f8fafc', border: '1px solid #e8edf3', borderRadius: 14,
-              padding: '18px 20px', textDecoration: 'none', color: '#213143',
-              transition: 'transform 0.2s, box-shadow 0.2s'
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 8px 20px rgba(0,0,0,0.08)' }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = 'none' }}
-            >
-              <div style={{ fontWeight: 800, color: '#1d4f2f', marginBottom: 6 }}>{link.title}</div>
-              <div style={{ fontSize: 13, color: '#5f6b7a', lineHeight: 1.6 }}>{link.desc}</div>
-            </a>
-          ))}
-        </div>
-      </ChartShell>
-
-      {/* Notes */}
       <ChartShell title="Internal Notes" subtitle="Administrative reminders">
         <ul style={{ margin: 0, paddingLeft: 20, color: '#344150', lineHeight: 1.8 }}>
           {NOTES.map((note, i) => <li key={i}>{note}</li>)}
@@ -253,14 +336,14 @@ function AdminDashboard({ data, onLogout }) {
 // ── Main Admin Page ──
 export default function Admin() {
   const { loading, authenticated, role, login, logout } = useAuth()
-  const { data, status, error } = useCollectorData()
+  const { data } = useCollectorData()
   const [loginError, setLoginError] = useState('')
 
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
-        <div style={{ width: 40, height: 40, border: '4px solid #e8f5e9', borderTopColor: '#2E7D32', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <div style={{ width: 40, height: 40, border: '4px solid #e8f5e9', borderTopColor: '#2E7D32', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
         <div style={{ color: '#8898aa' }}>Checking access…</div>
       </div>
     )
@@ -274,11 +357,6 @@ export default function Admin() {
     }} error={loginError} />
   }
 
-  // Collector sees only their own data
-  if (role === 'collector') {
-    return <CollectorDashboard data={data} onLogout={logout} />
-  }
-
-  // Admin sees everything
+  if (role === 'collector') return <CollectorDashboard data={data} onLogout={logout} />
   return <AdminDashboard data={data} onLogout={logout} />
 }
