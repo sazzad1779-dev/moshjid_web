@@ -18,7 +18,7 @@ const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: '#506174',
 
 // ── Transaction Form ──
 function TransactionForm({ enteredBy }) {
-  const empty = { date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '', paymentMethod: 'Cash (নগদ)', notes: '' }
+  const empty = { date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '', paymentMethod: 'Cash (নগদ)', notes: '', donorName: '' }
   const [form, setForm] = useState(empty)
   const [status, setStatus] = useState(null)
   const [errMsg, setErrMsg] = useState('')
@@ -83,6 +83,11 @@ function TransactionForm({ enteredBy }) {
         <div>
           <label style={lbl}>Description / বিবরণ *</label>
           <input type="text" required placeholder="e.g. Friday donation" value={form.description} onChange={e => set('description', e.target.value)} {...inp()} />
+        </div>
+
+        <div>
+          <label style={lbl}>{form.type === 'income' ? 'Donor Name / দাতার নাম *' : 'Payee Name / প্রাপকের নাম *'}</label>
+          <input type="text" required placeholder={form.type === 'income' ? 'e.g. Abdur Rahman' : 'e.g. DESCO Bill'} value={form.donorName} onChange={e => set('donorName', e.target.value)} {...inp()} />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

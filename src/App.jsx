@@ -4,7 +4,6 @@ import Home from './pages/Home.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Monthly from './pages/Monthly.jsx'
 import Transactions from './pages/Transactions.jsx'
-import About from './pages/About.jsx'
 import Admin from './pages/Admin.jsx'
 import { formatTaka } from './utils/formatters.js'
 import { TAB_ICONS } from './constants.js'
@@ -14,7 +13,6 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard', desc: 'Analytics' },
   { id: 'monthly', label: 'Monthly',   desc: 'Finance' },
   { id: 'transactions', label: 'Transactions', desc: 'All Records' },
-  { id: 'about',   label: 'About',     desc: 'Info' },
   { id: 'admin', label: 'Admin', desc: 'Private' },
   
 ]
@@ -41,9 +39,9 @@ export default function App() {
   //       <div style={{ maxWidth: 480, textAlign: 'center', background: '#fff', borderRadius: 18, padding: '32px 28px', boxShadow: '0 14px 34px rgba(0,0,0,0.08)' }}>
   //         <h2 style={{ margin: 0, fontSize: 24, color: '#213143' }}>Setup Needed</h2>
   //         <p style={{ marginTop: 10, color: '#5f6b7a', lineHeight: 1.7 }}>
-  //           Couldn't load the sheet: <strong>{error}</strong>
+  //           Couldn't load the data: <strong>{error}</strong>
   //           <br /><br />
-  //           Make sure your <code>SHEET_CSV_URL</code> environment variable is set in Vercel, then refresh.
+  //           Make sure your <code>DATABASE_URL</code> environment variable is set, then refresh.
   //         </p>
   //         <button onClick={refetch} style={{ marginTop: 20, background: '#1d4f2f', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
   //           Retry
@@ -62,7 +60,6 @@ export default function App() {
       case 'dashboard': return <Dashboard {...props} />
       case 'monthly': return <Monthly {...props} />
       case 'transactions': return <Transactions {...props} />
-      case 'about': return <About />
       case 'admin': return <Admin />
       default: return <Home {...props} />
     }
