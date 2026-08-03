@@ -35,23 +35,23 @@ export default function App() {
     )
   }
 
-  if (status === 'error') {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f8f1', padding: 20 }}>
-        <div style={{ maxWidth: 480, textAlign: 'center', background: '#fff', borderRadius: 18, padding: '32px 28px', boxShadow: '0 14px 34px rgba(0,0,0,0.08)' }}>
-          <h2 style={{ margin: 0, fontSize: 24, color: '#213143' }}>Setup Needed</h2>
-          <p style={{ marginTop: 10, color: '#5f6b7a', lineHeight: 1.7 }}>
-            Couldn't load the sheet: <strong>{error}</strong>
-            <br /><br />
-            Make sure your <code>SHEET_CSV_URL</code> environment variable is set in Vercel, then refresh.
-          </p>
-          <button onClick={refetch} style={{ marginTop: 20, background: '#1d4f2f', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
-            Retry
-          </button>
-        </div>
-      </div>
-    )
-  }
+  // if (status === 'error') {
+  //   return (
+  //     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f4f8f1', padding: 20 }}>
+  //       <div style={{ maxWidth: 480, textAlign: 'center', background: '#fff', borderRadius: 18, padding: '32px 28px', boxShadow: '0 14px 34px rgba(0,0,0,0.08)' }}>
+  //         <h2 style={{ margin: 0, fontSize: 24, color: '#213143' }}>Setup Needed</h2>
+  //         <p style={{ marginTop: 10, color: '#5f6b7a', lineHeight: 1.7 }}>
+  //           Couldn't load the sheet: <strong>{error}</strong>
+  //           <br /><br />
+  //           Make sure your <code>SHEET_CSV_URL</code> environment variable is set in Vercel, then refresh.
+  //         </p>
+  //         <button onClick={refetch} style={{ marginTop: 20, background: '#1d4f2f', color: '#fff', border: 'none', borderRadius: 10, padding: '12px 24px', fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
+  //           Retry
+  //         </button>
+  //       </div>
+  //     </div>
+  //   )
+  // }
 
   const { balance, totalIncome, totalExpense } = summary
 
