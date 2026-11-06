@@ -1,4 +1,13 @@
 import { getPool } from './_db.js'
+import { applyCors } from './_security.js'
+
+// PUBLIC endpoint — intentionally unauthenticated so the homepage/dashboard can
+// show community finances. Because it is public, it must NEVER expose personal
+// or operational details: donor names, phone numbers, notes, payment methods,
+// statuses, receipt numbers, or who entered the record.
+//
+// If you need the full, sensitive fields, build a separate authenticated route
+// (admin-only) instead of adding fields here.
 
 // Format in the server's local calendar so dates don't shift across UTC midnight
 function fmtDate(d) {
@@ -8,6 +17,18 @@ function fmtDate(d) {
 }
 
 export default async function handler(req, res) {
+  applyCors(res, req)
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end()
+    return
+  }
+
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
   if (!process.env.DATABASE_URL) {
     res.status(500).json({ error: 'DATABASE_URL environment variable is not set.' })
     return
@@ -16,26 +37,22 @@ export default async function handler(req, res) {
   try {
     const pool = getPool()
     const { rows } = await pool.query(
-      `SELECT t.id, t.date, t.type, t.category, t.amount, t.note,
-              t.payment_method, t.status, t.receipt_number,
-              p.full_name AS entered_by
+      `SELECT t.id, t.date, tc.type AS type, tc.name AS category, t.amount, t.description AS note
        FROM transactions t
-       LEFT JOIN profiles p ON p.id = t.entered_by
+       LEFT JOIN transaction_categories tc ON tc.id = t.category_id
+       WHERE t.is_deleted = false AND t.amount > 0
        ORDER BY t.date ASC, t.id ASC`
     )
 
+    // Public-safe projection: only the fields needed by the public pages.
     const mapped = rows.map(r => ({
-      id: r.id,
+      id: r.id || '',
       date: fmtDate(r.date),
-      type: r.type,
+      type: r.type || 'other',
       category: r.category || 'Uncategorized',
       amount: parseFloat(r.amount) || 0,
       note: r.note || '',
-      enteredBy: r.entered_by || '',
-      paymentMethod: r.payment_method || 'cash',
-      status: r.status || 'pending',
-      receiptNumber: r.receipt_number || '',
-    })).filter(r => r.amount > 0)
+    }))
 
     res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')
     res.status(200).json({ rows: mapped, count: mapped.length, updatedAt: new Date().toISOString() })

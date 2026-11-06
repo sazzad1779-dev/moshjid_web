@@ -58,7 +58,7 @@ function TransactionForm({ enteredBy }) {
     <ChartShell title="Add Transaction" subtitle="লেনদেন যোগ করুন">
       <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14, maxWidth: 600 }}>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="form-grid-2">
           <div>
             <label style={lbl}>Date / তারিখ *</label>
             <input type="date" required value={form.date} onChange={e => set('date', e.target.value)} {...inp()} />
@@ -90,7 +90,7 @@ function TransactionForm({ enteredBy }) {
           <input type="text" required placeholder={form.type === 'income' ? 'e.g. Abdur Rahman' : 'e.g. DESCO Bill'} value={form.donorName} onChange={e => set('donorName', e.target.value)} {...inp()} />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="form-grid-2">
           <div>
             <label style={lbl}>Amount (Taka) / পরিমাণ *</label>
             <input type="number" required min="1" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} {...inp()} />
@@ -341,7 +341,7 @@ function AdminDashboard({ data, onLogout }) {
 // ── Main Admin Page ──
 export default function Admin() {
   const { loading, authenticated, role, login, logout } = useAuth()
-  const { data } = useCollectorData()
+  const { data } = useCollectorData({ enabled: authenticated })
   const [loginError, setLoginError] = useState('')
 
   if (loading) {

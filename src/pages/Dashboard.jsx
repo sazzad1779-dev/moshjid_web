@@ -74,7 +74,7 @@ export default function Dashboard({ rows, summary }) {
     <div style={{ display: 'grid', gap: 20 }}>
 
       {/* ── KPI Row ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+      <div className="kpi-row">
         <Kpi label="Total Income" value={formatTaka(totalIncome)} color={COLORS.income} icon="💰" />
         <Kpi label="Total Expense" value={formatTaka(totalExpense)} color={COLORS.expense} icon="💸" />
         <Kpi label="Available Balance" value={formatTaka(balance)} color={balance >= 0 ? COLORS.balance : COLORS.expense} icon="🏦" />
@@ -83,7 +83,7 @@ export default function Dashboard({ rows, summary }) {
       </div>
 
       {/* ── Row 2: Trend + Radar ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.6fr', gap: 20 }}>
+      <div className="chart-grid-2">
         <ChartShell title="Monthly Trend" subtitle="Income, expense & balance over time">
           <ResponsiveContainer width="100%" height={300}>
             <ComposedChart data={monthlyTrend}>
@@ -121,7 +121,7 @@ export default function Dashboard({ rows, summary }) {
       </div>
 
       {/* ── Row 3: Dual Pie Charts ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className="chart-grid-2">
         <ChartShell title="Expense Breakdown" subtitle="By category">
           <ResponsiveContainer width="100%" height={280}>
             <PieChart>

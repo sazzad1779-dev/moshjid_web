@@ -1,8 +1,7 @@
 import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
+import { getSecret, applyCors, readSessionToken } from './_security.js'
 
-const SECRET = new TextEncoder().encode(process.env.ADMIN_SECRET || 'change-this-in-production-32-chars!')
-const COOKIE_NAME = 'mosque_session'
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
@@ -20,12 +19,12 @@ const PAYMENT_METHOD_MAP = {
 }
 
 async function verifyAuth(req) {
-  const cookie = req.headers.cookie || ''
-  const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`))
-  const token = match ? match[1] : null
+  const secret = getSecret()
+  if (!secret) return null
+  const token = readSessionToken(req)
   if (!token) return null
   try {
-    const { payload } = await jwtVerify(token, SECRET, { clockTolerance: 60 })
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { clockTolerance: 60 })
     return payload
   } catch {
     return null
@@ -101,6 +100,34 @@ async function resolveProfile(pool, name, role) {
   return userId
 }
 
+async function resolveCategoryId(pool, name, type) {
+  const found = await pool.query(
+    `SELECT id FROM transaction_categories WHERE name = $1 AND type = $2::transaction_type LIMIT 1`,
+    [name, type]
+  )
+  if (found.rows[0]) return found.rows[0].id
+
+  try {
+    const inserted = await pool.query(
+      `INSERT INTO transaction_categories (name, type, is_active)
+       VALUES ($1, $2::transaction_type, true)
+       RETURNING id`,
+      [name, type]
+    )
+    return inserted.rows[0].id
+  } catch (err) {
+    // Unique violation (race) → re-fetch
+    if (err.code === '23505') {
+      const again = await pool.query(
+        `SELECT id FROM transaction_categories WHERE name = $1 AND type = $2::transaction_type LIMIT 1`,
+        [name, type]
+      )
+      if (again.rows[0]) return again.rows[0].id
+    }
+    throw err
+  }
+}
+
 async function getReceiptPrefix(pool) {
   try {
     const { rows } = await pool.query('SELECT receipt_prefix FROM settings LIMIT 1')
@@ -118,9 +145,7 @@ function genReceiptNumber(prefix = 'RCPT') {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  applyCors(res, req)
 
   if (req.method === 'OPTIONS') { res.status(200).end(); return }
   if (req.method !== 'POST') { res.status(405).json({ error: 'Method not allowed' }); return }
@@ -156,7 +181,6 @@ export default async function handler(req, res) {
     ? paymentMethod
     : (PAYMENT_METHOD_MAP[paymentMethod] || 'other')
 
-  const note = `${description}${notes ? ' | ' + notes : ''}`
   const collectorName = String(enteredBy).trim()
 
   try {
@@ -164,6 +188,9 @@ export default async function handler(req, res) {
     const profileId = await resolveProfile(pool, collectorName, session.role)
     const collectorId = session.role === 'collector' ? profileId : null
     const prefix = await getReceiptPrefix(pool)
+    const categoryId = await resolveCategoryId(pool, category, type)
+
+    const combinedNote = `${description}${notes ? ' | ' + notes : ''}`
 
     let inserted = null
     for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
@@ -171,12 +198,12 @@ export default async function handler(req, res) {
       try {
         const { rows } = await pool.query(
           `INSERT INTO transactions
-             (date, type, category, amount, note, payment_method, status,
+             (date, category_id, amount, description, payment_method, status,
               entered_by, collector_id, receipt_number, donor_name)
-           VALUES ($1, $2::transaction_type, $3, $4, $5, $6::payment_method,
-                   'confirmed'::transaction_status, $7, $8, $9, $10)
+           VALUES ($1, $2, $3, $4, $5::payment_method,
+                   'confirmed'::transaction_status, $6, $7, $8, $9)
            RETURNING id, receipt_number`,
-          [date, type, category, parsedAmount, note, method, profileId, collectorId, receiptNumber, donor]
+          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, donor]
         )
         inserted = rows[0]
       } catch (err) {

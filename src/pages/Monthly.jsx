@@ -72,6 +72,7 @@ export default function Monthly({ rows, summary }) {
         subtitle="Select a month to inspect daily activity"
         action={
           <select
+            className="month-select"
             value={sel.month}
             onChange={e => setSelectedMonth(e.target.value)}
             style={{ border: '1px solid #dfe6ea', borderRadius: 10, padding: '10px 14px', fontSize: 14, minWidth: 200, background: '#fff', color: '#233241', cursor: 'pointer' }}

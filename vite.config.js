@@ -12,7 +12,7 @@ export default defineConfig({
       }
     }
   },
-  build: { outDir: 'dist', sourcemap: true },
+  build: { outDir: 'dist', sourcemap: false, chunkSizeWarningLimit: 700 },
   optimizeDeps: {
     include: ['react', 'react-dom', 'recharts', 'papaparse']
   }

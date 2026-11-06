@@ -1,8 +1,6 @@
 import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
-
-const SECRET = new TextEncoder().encode(process.env.ADMIN_SECRET || 'change-this-in-production-32-chars!')
-const COOKIE_NAME = 'mosque_session'
+import { getSecret, applyCors, readSessionToken } from './_security.js'
 
 // Format in the server's local calendar so dates don't shift across UTC midnight
 function fmtDate(d) {
@@ -12,12 +10,12 @@ function fmtDate(d) {
 }
 
 async function verifyAuth(req) {
-  const cookie = req.headers.cookie || ''
-  const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`))
-  const token = match ? match[1] : null
+  const secret = getSecret()
+  if (!secret) return null
+  const token = readSessionToken(req)
   if (!token) return null
   try {
-    const { payload } = await jwtVerify(token, SECRET, { clockTolerance: 60 })
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { clockTolerance: 60 })
     return payload
   } catch {
     return null
@@ -25,9 +23,7 @@ async function verifyAuth(req) {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  applyCors(res, req)
 
   if (req.method === 'OPTIONS') { res.status(200).end(); return }
   if (req.method !== 'GET') { res.status(405).json({ error: 'Method not allowed' }); return }
@@ -38,12 +34,26 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool()
+
+    // A collector must only ever see their own data. The PIN login JWT carries
+    // the collector's name (set from COLLECTOR_PIN_NAMES / COLLECTOR_DEFAULT_NAME
+    // in auth.js), so scope the query to that person's profile.
+    const params = []
+    let scopeClause = ''
+    if (session.role === 'collector') {
+      params.push(session.name || 'Collector')
+      scopeClause = `AND p.full_name = $${params.length}`
+    }
+
     const { rows } = await pool.query(
-      `SELECT p.full_name AS name, t.type, t.category, t.amount, t.note, t.date
+      `SELECT p.full_name AS name, tc.type AS type, tc.name AS category, t.amount, t.description AS note, t.date, t.entered_by, t.created_at
        FROM transactions t
        LEFT JOIN profiles p ON p.id = t.entered_by
-       WHERE t.amount > 0
-       ORDER BY t.date DESC, t.created_at DESC`
+       LEFT JOIN transaction_categories tc ON tc.id = t.category_id
+       WHERE t.is_deleted = false AND t.amount > 0
+         ${scopeClause}
+       ORDER BY t.date DESC, t.created_at DESC`,
+      params
     )
 
     const byCollector = {}
@@ -54,8 +64,9 @@ export default async function handler(req, res) {
       }
       const c = byCollector[name]
       const amount = parseFloat(r.amount) || 0
-      if (r.type === 'expense') c.expense += amount
-      else c.income += amount
+      const type = r.type || 'other'
+      if (type === 'expense') c.expense += amount
+      else if (type === 'income') c.income += amount
       c.count += 1
       c.transactions.push({
         date: fmtDate(r.date),

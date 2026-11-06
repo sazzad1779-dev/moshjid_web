@@ -2,9 +2,9 @@ import React from 'react'
 
 export default function StatusDot({ type }) {
   const isIncome = type === 'income'
-  const bg = isIncome ? '#e8f5e9' : '#ffebee'
-  const fg = isIncome ? '#2E7D32' : '#C62828'
-  const bd = isIncome ? '#c8e6c9' : '#ffcdd2'
+  const bg = isIncome ? 'var(--tint-income)' : 'var(--tint-expense)'
+  const fg = isIncome ? 'var(--c-income)' : 'var(--c-expense)'
+  const bd = isIncome ? 'var(--tint-income-border)' : 'var(--tint-expense-border)'
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,

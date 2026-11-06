@@ -3,11 +3,11 @@ import React from 'react'
 export default function ChartShell({ title, subtitle, children, action, style }) {
   return (
     <div style={{
-      background: '#fff',
-      borderRadius: 16,
+      background: 'var(--c-surface)',
+      borderRadius: 'var(--radius-md)',
       padding: 22,
-      boxShadow: '0 12px 28px rgba(16,33,28,0.06)',
-      border: '1px solid #eef2f5',
+      boxShadow: 'var(--shadow-card)',
+      border: '1px solid var(--c-border)',
       ...style
     }}>
       <div style={{
@@ -15,8 +15,8 @@ export default function ChartShell({ title, subtitle, children, action, style })
         marginBottom: 16, flexWrap: 'wrap', gap: 8
       }}>
         <div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#213143' }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 13, color: '#8898aa', marginTop: 4 }}>{subtitle}</div>}
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-ink)' }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 13, color: 'var(--c-muted-2)', marginTop: 4 }}>{subtitle}</div>}
         </div>
         {action}
       </div>
