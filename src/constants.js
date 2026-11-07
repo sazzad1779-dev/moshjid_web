@@ -1,10 +1,13 @@
 export const COLORS = {
-  income: '#2E7D32',
-  expense: '#C62828',
-  balance: '#1565C0',
-  warning: '#EF6C00',
-  accent: '#7c4d12',
-  palette: ['#2E7D32','#C62828','#1565C0','#EF6C00','#6A1B9A','#00838F','#AD1457','#5D4037','#455A64','#E64A19']
+  income: 'var(--c-income)',
+  expense: 'var(--c-expense)',
+  balance: 'var(--c-balance)',
+  warning: 'var(--c-warning)',
+  accent: 'var(--c-accent)',
+  palette: [
+    'var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)', 'var(--chart-4)', 'var(--chart-5)',
+    'var(--chart-6)', 'var(--chart-7)', 'var(--chart-8)', 'var(--chart-9)', 'var(--chart-10)',
+  ]
 }
 
 export const TAB_ICONS = {

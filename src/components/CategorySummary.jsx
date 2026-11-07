@@ -58,26 +58,26 @@ export default function CategorySummary({ rows, selectedType, dateStart, dateEnd
       }
     >
       {breakdown.length === 0 ? (
-        <div style={{ padding: '32px 0', textAlign: 'center', color: '#8898aa', fontSize: 14 }}>
+        <div style={{ padding: '32px 0', textAlign: 'center', color: 'var(--c-muted-2)', fontSize: 14 }}>
           No data available for the selected filters.
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
           {selectedType === 'all' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, padding: '8px 0 16px', borderBottom: '2px solid #eef2f5', marginBottom: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, padding: '8px 0 16px', borderBottom: '2px solid var(--c-border)', marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: COLORS.income }} />
-                <span style={{ fontSize: 13, color: '#5f6b7a' }}>Total Income</span>
+                <span style={{ fontSize: 13, color: 'var(--c-muted)' }}>Total Income</span>
                 <strong style={{ color: COLORS.income, fontSize: 15 }}>{formatTaka(totalByType.income)}</strong>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: COLORS.expense }} />
-                <span style={{ fontSize: 13, color: '#5f6b7a' }}>Total Expense</span>
+                <span style={{ fontSize: 13, color: 'var(--c-muted)' }}>Total Expense</span>
                 <strong style={{ color: COLORS.expense, fontSize: 15 }}>{formatTaka(totalByType.expense)}</strong>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ width: 10, height: 10, borderRadius: 3, background: COLORS.balance }} />
-                <span style={{ fontSize: 13, color: '#5f6b7a' }}>Net Balance</span>
+                <span style={{ fontSize: 13, color: 'var(--c-muted)' }}>Net Balance</span>
                 <strong style={{ color: COLORS.balance, fontSize: 15 }}>{formatTaka(totalByType.income - totalByType.expense)}</strong>
               </div>
             </div>
@@ -95,11 +95,11 @@ export default function CategorySummary({ rows, selectedType, dateStart, dateEnd
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{ fontSize: 13, color: '#3a4a5a', fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontSize: 13, color: 'var(--c-ink-2)', fontWeight: 500 }}>{label}</span>
                   </div>
                   <strong style={{ color, fontSize: 14 }}>{formatTaka(item.amount)}</strong>
                 </div>
-                <div style={{ height: 6, background: '#eef2f5', borderRadius: 4, overflow: 'hidden' }}>
+                <div style={{ height: 6, background: 'var(--c-border)', borderRadius: 4, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${Math.max(ratio * 100, 2)}%`, background: color, borderRadius: 4, opacity: 0.7, transition: 'width 0.3s ease' }} />
                 </div>
               </div>

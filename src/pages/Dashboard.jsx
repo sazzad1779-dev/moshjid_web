@@ -52,7 +52,7 @@ export default function Dashboard({ rows, summary }) {
     { header: '% of Total', align: 'right',
       render: r => {
         const t = r.type === 'income' ? totalIncome : totalExpense
-        return <span style={{ color: '#8898aa' }}>{pctOf(r.amount, t)}%</span>
+        return <span style={{ color: 'var(--c-muted-2)' }}>{pctOf(r.amount, t)}%</span>
       }},
     { header: 'Share', render: r => {
       const t = r.type === 'income' ? totalIncome : totalExpense
@@ -79,7 +79,7 @@ export default function Dashboard({ rows, summary }) {
         <Kpi label="Total Expense" value={formatTaka(totalExpense)} color={COLORS.expense} icon="💸" />
         <Kpi label="Available Balance" value={formatTaka(balance)} color={balance >= 0 ? COLORS.balance : COLORS.expense} icon="🏦" />
         <Kpi label="Active Categories" value={allCats.length} color={COLORS.accent} icon="🏷️" />
-        <Kpi label="Transactions" value={rows.length} color="#455A64" icon="📑" />
+        <Kpi label="Transactions" value={rows.length} color="var(--c-ink-2)" icon="📑" />
       </div>
 
       {/* ── Row 2: Trend + Radar ── */}
@@ -93,10 +93,10 @@ export default function Dashboard({ rows, summary }) {
                   <stop offset="95%" stopColor={COLORS.balance} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#8898aa' }} />
-              <YAxis tick={{ fontSize: 11, fill: '#8898aa' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
-              <Tooltip contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }} formatter={v => formatTaka(v)} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+              <XAxis dataKey="month" tick={{ fontSize: 11, fill: 'var(--chart-tick)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--chart-tick)' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
+              <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', background: 'var(--tooltip-bg)', color: 'var(--c-ink)', boxShadow: 'var(--tooltip-shadow)' }} formatter={v => formatTaka(v)} />
               <Legend wrapperStyle={{ paddingTop: 8 }} />
               <Area type="monotone" dataKey="balance" fill="url(#balGrad)" stroke={COLORS.balance} strokeWidth={2} name="Balance" />
               <Bar dataKey="income" fill={COLORS.income} radius={[6, 6, 0, 0]} name="Income" barSize={28} />
@@ -108,9 +108,9 @@ export default function Dashboard({ rows, summary }) {
         <ChartShell title="Category Radar" subtitle="Income vs Expense by category">
           <ResponsiveContainer width="100%" height={300}>
             <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
-              <PolarGrid stroke="#e0e4e8" />
-              <PolarAngleAxis dataKey="category" tick={{ fontSize: 10, fill: '#5f6b7a' }} />
-              <PolarRadiusAxis tick={{ fontSize: 10, fill: '#8898aa' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
+              <PolarGrid stroke="var(--chart-grid)" />
+              <PolarAngleAxis dataKey="category" tick={{ fontSize: 10, fill: 'var(--c-muted)' }} />
+              <PolarRadiusAxis tick={{ fontSize: 10, fill: 'var(--chart-tick)' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
               <Radar name="Income" dataKey="income" stroke={COLORS.income} fill={COLORS.income} fillOpacity={0.25} />
               <Radar name="Expense" dataKey="expense" stroke={COLORS.expense} fill={COLORS.expense} fillOpacity={0.15} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
@@ -127,7 +127,7 @@ export default function Dashboard({ rows, summary }) {
             <PieChart>
               <Pie data={expenseByCat} dataKey="amount" nameKey="category" outerRadius={90} innerRadius={55}
                 paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`} className="pie-labels">
-                {expenseByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={2} />)}
+                {expenseByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="var(--c-surface)" strokeWidth={2} />)}
               </Pie>
               <Tooltip formatter={v => formatTaka(v)} />
               <Legend />
@@ -140,7 +140,7 @@ export default function Dashboard({ rows, summary }) {
             <PieChart>
               <Pie data={incomeByCat} dataKey="amount" nameKey="category" outerRadius={90} innerRadius={55}
                 paddingAngle={3} label={({ category, percent }) => `${category} ${(percent * 100).toFixed(0)}%`} className="pie-labels">
-                {incomeByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={2} />)}
+                {incomeByCat.map((_, i) => <Cell key={i} fill={PALETTE[i % PALETTE.length]} stroke="var(--c-surface)" strokeWidth={2} />)}
               </Pie>
               <Tooltip formatter={v => formatTaka(v)} />
               <Legend />
@@ -175,13 +175,13 @@ export default function Dashboard({ rows, summary }) {
               render: r => {
                 const net = r.income - r.expense
                 const max = Math.max(r.income, r.expense)
-                return <span style={{ color: '#8898aa' }}>{pctOf(net, max)}%</span>
+                return <span style={{ color: 'var(--c-muted-2)' }}>{pctOf(net, max)}%</span>
               }},
             { header: 'Health',
               render: r => {
                 const net = r.income - r.expense
                 const max = Math.max(r.income, r.expense)
-                const color = net > 0 ? COLORS.income : net < 0 ? COLORS.expense : '#8898aa'
+                const color = net > 0 ? COLORS.income : net < 0 ? COLORS.expense : 'var(--c-muted-2)'
                 return <ProgressBar value={Math.abs(net)} max={max} color={color} label={net >= 0 ? 'Surplus' : 'Deficit'} />
               }},
           ]}

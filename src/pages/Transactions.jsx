@@ -67,15 +67,15 @@ export default function Transactions({ rows, summary, categories }) {
         />
       </ChartShell>
 
-      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+      <div style={{ display: 'grid', gap: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))' }}>
         <ChartShell title="Daily Activity Pattern" subtitle="Net flow per day">
           <ResponsiveContainer width="100%" height={250}>
             {hasDailyData ? (
               <BarChart data={dailyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
-                <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#8898aa' }} />
-                <YAxis tick={{ fontSize: 12, fill: '#8898aa' }} tickFormatter={v => '৳' + (Math.abs(v) / 1000).toFixed(0) + 'k'} />
-                <Tooltip formatter={v => formatTaka(v)} cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+                <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--chart-tick)' }} />
+                <YAxis tick={{ fontSize: 12, fill: 'var(--chart-tick)' }} tickFormatter={v => '৳' + (Math.abs(v) / 1000).toFixed(0) + 'k'} />
+                <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', background: 'var(--tooltip-bg)', color: 'var(--c-ink)', boxShadow: 'var(--tooltip-shadow)' }} formatter={v => formatTaka(v)} cursor={{ fill: 'rgba(15, 23, 42, 0.04)' }} />
                 <Bar dataKey="net" radius={[6, 6, 0, 0]}>
                   {dailyData.map((entry, index) => (
                     <Cell key={`${entry.date}-${index}`} fill={entry.net >= 0 ? COLORS.income : COLORS.expense} />
@@ -83,7 +83,7 @@ export default function Transactions({ rows, summary, categories }) {
                 </Bar>
               </BarChart>
             ) : (
-              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8898aa', fontSize: 14 }}>
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--c-muted-2)', fontSize: 14 }}>
                 No activity has been recorded yet.
               </div>
             )}
@@ -98,8 +98,8 @@ export default function Transactions({ rows, summary, categories }) {
               { label: 'Average Transaction', value: formatTaka(stats.avgTransaction), color: COLORS.balance },
               { label: 'Date Range', value: stats.dateRange ? `${formatDate(stats.dateRange.start)} — ${formatDate(stats.dateRange.end)}` : 'N/A', color: COLORS.accent },
             ].map((s, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 3 ? '1px solid #eef2f5' : 'none' }}>
-                <span style={{ color: '#5f6b7a', fontSize: 14 }}>{s.label}</span>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0', borderBottom: i < 3 ? '1px solid var(--c-border)' : 'none' }}>
+                <span style={{ color: 'var(--c-muted)', fontSize: 14 }}>{s.label}</span>
                 <strong style={{ color: s.color, fontSize: 15 }}>{s.value}</strong>
               </div>
             ))}
@@ -111,8 +111,8 @@ export default function Transactions({ rows, summary, categories }) {
 
       <ChartShell title="Transaction Records" subtitle="Browse all transactions with pagination">
         <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ color: '#8898aa', fontSize: 14 }}>Showing {filtered.length} records</span>
-          <button onClick={handleClear} style={{ border: '1px solid #dfe6ea', background: '#fff', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: '#5f6b7a', fontWeight: 600, fontSize: 13 }}>
+          <span style={{ color: 'var(--c-muted-2)', fontSize: 14 }}>Showing {filtered.length} records</span>
+          <button onClick={handleClear} style={{ border: '1px solid var(--c-border-strong)', background: 'var(--c-surface)', borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: 'var(--c-muted)', fontWeight: 600, fontSize: 13 }}>
             Clear Filters
           </button>
         </div>

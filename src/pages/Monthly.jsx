@@ -75,7 +75,7 @@ export default function Monthly({ rows, summary }) {
             className="month-select"
             value={sel.month}
             onChange={e => setSelectedMonth(e.target.value)}
-            style={{ border: '1px solid #dfe6ea', borderRadius: 10, padding: '10px 14px', fontSize: 14, minWidth: 200, background: '#fff', color: '#233241', cursor: 'pointer' }}
+            style={{ border: '1px solid var(--c-border-strong)', borderRadius: 10, padding: '10px 14px', fontSize: 14, minWidth: 200, background: 'var(--c-surface)', color: 'var(--c-ink)', cursor: 'pointer' }}
           >
             {monthlySummary.map(m => (
               <option key={m.month} value={m.month}>{formatMonthLabel(m.month)}</option>
@@ -91,16 +91,16 @@ export default function Monthly({ rows, summary }) {
         </div>
 
         {/* ── Day-by-Day Comparison Chart ── */}
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#213143', marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-ink)', marginBottom: 10 }}>
           Day-by-Day Activity — {formatMonthLabel(sel.month)}
         </div>
         <ResponsiveContainer width="100%" height={260}>
           <ComposedChart data={dayByDay}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#eef2f5" />
-            <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#8898aa' }} />
-            <YAxis tick={{ fontSize: 11, fill: '#8898aa' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--chart-grid)" />
+            <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--chart-tick)' }} />
+            <YAxis tick={{ fontSize: 11, fill: 'var(--chart-tick)' }} tickFormatter={v => '৳' + (v/1000).toFixed(0) + 'k'} />
             <Tooltip
-              contentStyle={{ borderRadius: 12, border: 'none', boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
+              contentStyle={{ borderRadius: 12, border: '1px solid var(--c-border)', background: 'var(--tooltip-bg)', color: 'var(--c-ink)', boxShadow: 'var(--tooltip-shadow)' }}
               formatter={v => formatTaka(v)}
               labelFormatter={(label, payload) => `Date: ${payload?.[0]?.payload?.fullDate || label}`}
             />
@@ -113,19 +113,19 @@ export default function Monthly({ rows, summary }) {
 
         {/* ── Category mini-bars (inventive, no table) ── */}
         <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#213143', marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--c-ink)', marginBottom: 12 }}>
             Category Breakdown — {formatMonthLabel(sel.month)}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 10 }}>
             {catBreakdown.map((c, i) => (
               <div key={i} style={{
                 display: 'flex', alignItems: 'center', gap: 12,
-                padding: '10px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #eef2f5'
+                padding: '10px 14px', background: 'var(--c-surface-2)', borderRadius: 10, border: '1px solid var(--c-border)'
               }}>
                 <StatusDot type={c.type} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#344150' }}>{c.category}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--c-ink-2)' }}>{c.category}</span>
                     <span style={{ fontSize: 13, fontWeight: 700, color: c.type === 'income' ? COLORS.income : COLORS.expense }}>
                       {formatTaka(c.amount)}
                     </span>
@@ -145,8 +145,8 @@ export default function Monthly({ rows, summary }) {
           <div style={{ display: 'grid', gap: 18 }}>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
-                <span style={{ color: '#5f6b7a' }}>Budget Used</span>
-                <span style={{ fontWeight: 700, color: budgetPct > 100 ? COLORS.expense : '#344150' }}>
+                <span style={{ color: 'var(--c-muted)' }}>Budget Used</span>
+                <span style={{ fontWeight: 700, color: budgetPct > 100 ? COLORS.expense : 'var(--c-ink-2)' }}>
                   {formatPercent(budgetPct)}
                 </span>
               </div>
@@ -154,7 +154,7 @@ export default function Monthly({ rows, summary }) {
             </div>
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
-                <span style={{ color: '#5f6b7a' }}>Savings Target (20%)</span>
+                <span style={{ color: 'var(--c-muted)' }}>Savings Target (20%)</span>
                 <span style={{ fontWeight: 700, color: savingsPct >= 100 ? COLORS.income : COLORS.warning }}>
                   {formatPercent(savingsPct)}
                 </span>
@@ -163,16 +163,16 @@ export default function Monthly({ rows, summary }) {
             </div>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
-              borderRadius: 10, background: burnRate <= 0.8 ? '#e8f5e9' : burnRate <= 1 ? '#fff3e0' : '#ffebee'
+              borderRadius: 10, background: burnRate <= 0.8 ? 'var(--tint-income)' : burnRate <= 1 ? 'var(--tint-warning)' : 'var(--tint-expense)'
             }}>
               <span style={{ fontSize: 22 }}>
                 {burnRate <= 0.8 ? '✅' : burnRate <= 1 ? '⚠️' : '🚨'}
               </span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#344150' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--c-ink-2)' }}>
                   {burnRate <= 0.8 ? 'Healthy Budget' : burnRate <= 1 ? 'Tight Budget' : 'Over Budget'}
                 </div>
-                <div style={{ fontSize: 12, color: '#8898aa', marginTop: 2 }}>
+                <div style={{ fontSize: 12, color: 'var(--c-muted-2)', marginTop: 2 }}>
                   Burn rate: {formatPercent(burnRate * 100)}
                 </div>
               </div>
@@ -188,9 +188,9 @@ export default function Monthly({ rows, summary }) {
               { label: 'Largest Single Entry', value: formatTaka(selTxns.length ? Math.max(...selTxns.map(r => r.amount)) : 0) },
               { label: 'Active Categories', value: catBreakdown.length },
             ].map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < 3 ? '1px solid #eef2f5' : 'none' }}>
-                <span style={{ color: '#5f6b7a', fontSize: 14 }}>{item.label}</span>
-                <strong style={{ color: '#213143', fontSize: 15 }}>{item.value}</strong>
+              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: i < 3 ? '1px solid var(--c-border)' : 'none' }}>
+                <span style={{ color: 'var(--c-muted)', fontSize: 14 }}>{item.label}</span>
+                <strong style={{ color: 'var(--c-ink)', fontSize: 15 }}>{item.value}</strong>
               </div>
             ))}
           </div>

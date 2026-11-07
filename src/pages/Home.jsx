@@ -61,7 +61,7 @@ export default function Home({ rows = [] }) {
     <div style={{ display: 'grid', gap: 20 }}>
 
       {/* ── Hero Message ── */}
-      <ChartShell title="" style={{ textAlign: 'center', padding: '40px 30px', background: 'linear-gradient(135deg, #193f2a 0%, #2f6b3f 100%)' }}>
+      <ChartShell title="" style={{ textAlign: 'center', padding: '40px 30px', background: 'var(--grad-brand-soft)', borderColor: 'transparent' }}>
 
         <h2 style={{ fontSize: 28, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.4 }}>
           "দান দেখুন, খরচ জানুন, মসজিদ গড়ুন"
@@ -76,16 +76,16 @@ export default function Home({ rows = [] }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
         {FEATURES.map((f, i) => (
           <div key={i} style={{
-            background: '#fff', borderRadius: 16, padding: '24px 20px',
-            boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5',
+            background: 'var(--c-surface)', borderRadius: 16, padding: '24px 20px',
+            boxShadow: 'var(--shadow-card)', border: '1px solid var(--c-border)',
             textAlign: 'center', transition: 'transform 0.2s',
           }}
           onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
           onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
           >
             <div style={{ fontSize: 36, marginBottom: 12 }}>{f.icon}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#1d4f2f', marginBottom: 6 }}>{f.title}</div>
-            <div style={{ fontSize: 13, color: '#5f6b7a', lineHeight: 1.6 }}>{f.desc}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-primary)', marginBottom: 6 }}>{f.title}</div>
+            <div style={{ fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.6 }}>{f.desc}</div>
           </div>
         ))}
       </div>
@@ -95,18 +95,18 @@ export default function Home({ rows = [] }) {
         <div style={{ display: 'grid', gap: 16 }}>
           {QURAN.map((q, i) => (
             <div key={i} style={{
-              background: '#f8fafc', borderRadius: 14, padding: '20px 22px',
-              border: '1px solid #eef2f5', borderRight: `4px solid ${COLORS.income}`
+              background: 'var(--c-surface-2)', borderRadius: 14, padding: '20px 22px',
+              border: '1px solid var(--c-border)', borderRight: `4px solid ${COLORS.income}`
             }}>
-              <div style={{ fontSize: 20, color: '#1d4f2f', fontWeight: 700, marginBottom: 10, fontFamily: 'Traditional Arabic, serif', lineHeight: 1.8, direction: 'rtl' }}>
+              <div style={{ fontSize: 20, color: 'var(--c-primary)', fontWeight: 700, marginBottom: 10, fontFamily: 'Traditional Arabic, serif', lineHeight: 1.8, direction: 'rtl' }}>
                 {q.arabic}
               </div>
-              <div style={{ fontSize: 14, color: '#344150', lineHeight: 1.8, marginBottom: 10 }}>
+              <div style={{ fontSize: 14, color: 'var(--c-ink-2)', lineHeight: 1.8, marginBottom: 10 }}>
                 {q.bangla}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 12, color: '#8898aa', fontWeight: 600 }}>{q.surah}</span>
-                <span style={{ fontSize: 11, color: COLORS.income, background: '#e8f5e9', padding: '4px 10px', borderRadius: 12, fontWeight: 700 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 12, color: 'var(--c-muted-2)', fontWeight: 600 }}>{q.surah}</span>
+                <span style={{ fontSize: 11, color: 'var(--c-income)', background: 'var(--tint-income)', padding: '4px 10px', borderRadius: 12, fontWeight: 700 }}>
                   {q.theme}
                 </span>
               </div>
@@ -117,19 +117,19 @@ export default function Home({ rows = [] }) {
 
       {/* ── Hadith ── */}
       <ChartShell title="হাদিস শরিফ" subtitle="নবী করিম (সা.)-এর বাণী">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))', gap: 16 }}>
           {HADITH.map((h, i) => (
             <div key={i} style={{
-              background: '#fff8e1', borderRadius: 14, padding: '22px 20px',
-              border: '1px solid #ffecb3', position: 'relative'
+              background: 'var(--tint-warning)', borderRadius: 14, padding: '22px 20px',
+              border: '1px solid var(--tint-warning-border)', position: 'relative'
             }}>
-              <div style={{ fontSize: 32, position: 'absolute', top: 10, right: 14, opacity: 0.15, color: '#a67c2b' }}>❝</div>
-              <div style={{ fontSize: 14, color: '#5d4037', lineHeight: 1.8, marginBottom: 14, fontStyle: 'italic' }}>
+              <div style={{ fontSize: 32, position: 'absolute', top: 10, right: 14, opacity: 0.2, color: 'var(--c-gold)' }}>❝</div>
+              <div style={{ fontSize: 14, color: 'var(--c-ink-2)', lineHeight: 1.8, marginBottom: 14, fontStyle: 'italic' }}>
                 {h.text}
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, color: '#8a6a2b', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h.source}</span>
-                <span style={{ fontSize: 12, color: '#a67c2b', fontWeight: 600 }}>{h.ref}</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: 'var(--c-gold)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>{h.source}</span>
+                <span style={{ fontSize: 12, color: 'var(--c-gold)', fontWeight: 600 }}>{h.ref}</span>
               </div>
             </div>
           ))}
@@ -138,7 +138,7 @@ export default function Home({ rows = [] }) {
 
       {/* ── Call to Action ── */}
       <div style={{
-        background: 'linear-gradient(120deg, #2f6b3f 0%, #a67c2b 100%)',
+        background: 'var(--grad-brand)',
         borderRadius: 16, padding: '28px 24px', textAlign: 'center', color: '#fff'
       }}>
         <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 8 }}>
@@ -147,7 +147,7 @@ export default function Home({ rows = [] }) {
         <div style={{ fontSize: 14, color: '#e9f5ea', lineHeight: 1.7, maxWidth: 500, margin: '0 auto' }}>
           "মানুষ মরে গেলে তার সব আমল শেষ হয়ে যায়, কিন্তু তিনটি আমল বাদে — সদকায়ে জারিয়া, উপকারী জ্ঞান এবং সৎ সন্তানের দোয়া।"
         </div>
-        <div style={{ marginTop: 16, fontSize: 12, color: '#d6e7d3', opacity: 0.8 }}>
+        <div style={{ marginTop: 16, fontSize: 12, color: 'var(--c-primary-soft)', opacity: 0.9 }}>
           — সহীহ মুসলিম ১৬৩১
         </div>
       </div>

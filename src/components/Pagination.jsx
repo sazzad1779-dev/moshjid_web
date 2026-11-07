@@ -8,24 +8,24 @@ const styles = {
     gap: 8,
     marginTop: 20,
     paddingTop: 16,
-    borderTop: '1px solid #eef2f5',
+    borderTop: '1px solid var(--c-border)',
   },
   btn: {
-    border: '1px solid #dfe6ea',
-    background: '#fff',
+    border: '1px solid var(--c-border-strong)',
+    background: 'var(--c-surface)',
     borderRadius: 8,
     padding: '6px 12px',
     cursor: 'pointer',
-    color: '#5f6b7a',
+    color: 'var(--c-muted)',
     fontWeight: 600,
     fontSize: 13,
     minWidth: 36,
     transition: 'all 0.2s',
   },
   active: {
-    background: '#1d4f2f',
+    background: 'var(--c-primary)',
     color: '#fff',
-    border: '1px solid #1d4f2f',
+    border: '1px solid var(--c-primary)',
   },
   disabled: {
     opacity: 0.4,
@@ -61,7 +61,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }) {
 
       {visiblePages.map((p, i) => (
         p === '...' ? (
-          <span key={`ellipsis-${i}`} style={{ color: '#8898aa', padding: '0 4px' }}>...</span>
+          <span key={`ellipsis-${i}`} style={{ color: 'var(--c-muted-2)', padding: '0 4px' }}>...</span>
         ) : (
           <button
             key={p}

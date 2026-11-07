@@ -14,7 +14,7 @@ const NOTES = [
   'Never share your PIN with anyone. Contact admin if you suspect compromise.',
 ]
 
-const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: '#506174', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }
+const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }
 
 // ── Transaction Form ──
 function TransactionForm({ enteredBy }) {
@@ -48,9 +48,9 @@ function TransactionForm({ enteredBy }) {
   }
 
   const inp = (extra = {}) => ({
-    style: { padding: '11px 14px', borderRadius: 10, border: '1px solid #d5dde5', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: '#fff' },
-    onFocus: e => e.target.style.borderColor = '#1d4f2f',
-    onBlur: e => e.target.style.borderColor = '#d5dde5',
+    style: { padding: '11px 14px', borderRadius: 10, border: '1px solid var(--c-border-strong)', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', background: 'var(--c-surface)', color: 'var(--c-ink)' },
+    onFocus: e => e.target.style.borderColor = 'var(--c-primary)',
+    onBlur: e => e.target.style.borderColor = 'var(--c-border-strong)',
     ...extra
   })
 
@@ -106,27 +106,27 @@ function TransactionForm({ enteredBy }) {
         <div>
           <label style={lbl}>Additional Notes / অতিরিক্ত মন্তব্য</label>
           <textarea rows={2} placeholder="Optional extra details…" value={form.notes} onChange={e => set('notes', e.target.value)}
-            style={{ padding: '11px 14px', borderRadius: 10, border: '1px solid #d5dde5', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: '#fff' }}
-            onFocus={e => e.target.style.borderColor = '#1d4f2f'}
-            onBlur={e => e.target.style.borderColor = '#d5dde5'}
+            style={{ padding: '11px 14px', borderRadius: 10, border: '1px solid var(--c-border-strong)', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: 'var(--c-surface)', color: 'var(--c-ink)' }}
+            onFocus={e => e.target.style.borderColor = 'var(--c-primary)'}
+            onBlur={e => e.target.style.borderColor = 'var(--c-border-strong)'}
           />
         </div>
 
         <button type="submit" disabled={status === 'loading'} style={{
           border: 'none', borderRadius: 12, padding: '13px 20px',
-          background: status === 'loading' ? '#a0b0a0' : '#1d4f2f',
-          color: '#fff', fontWeight: 700, cursor: status === 'loading' ? 'wait' : 'pointer', fontSize: 15
+          background: status === 'loading' ? 'var(--c-muted-2)' : 'var(--c-primary-button)',
+          color: 'var(--c-on-primary)', fontWeight: 700, cursor: status === 'loading' ? 'wait' : 'pointer', fontSize: 15
         }}>
           {status === 'loading' ? 'Saving…' : 'Save Transaction'}
         </button>
 
         {status === 'success' && (
-          <div style={{ padding: '12px 14px', background: '#e8f5e9', borderRadius: 10, color: '#2E7D32', fontWeight: 600, fontSize: 13 }}>
+          <div style={{ padding: '12px 14px', background: 'var(--tint-income)', borderRadius: 10, color: 'var(--c-income)', fontWeight: 600, fontSize: 13 }}>
             ✅ Transaction saved successfully!
           </div>
         )}
         {status === 'error' && (
-          <div style={{ padding: '12px 14px', background: '#ffebee', borderRadius: 10, color: '#c62828', fontWeight: 600, fontSize: 13 }}>
+          <div style={{ padding: '12px 14px', background: 'var(--tint-expense)', borderRadius: 10, color: 'var(--c-expense)', fontWeight: 600, fontSize: 13 }}>
             ❌ {errMsg}
           </div>
         )}
@@ -154,8 +154,8 @@ function LoginScreen({ onLogin, error }) {
         <div style={{ maxWidth: 420, margin: '0 auto', padding: '20px 10px' }}>
           <div style={{ textAlign: 'center', marginBottom: 24 }}>
             <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#213143' }}>Mosque Admin Panel</div>
-            <div style={{ fontSize: 13, color: '#8898aa', marginTop: 6 }}>Enter your PIN to continue</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--c-ink)' }}>Mosque Admin Panel</div>
+            <div style={{ fontSize: 13, color: 'var(--c-muted-2)', marginTop: 6 }}>Enter your PIN to continue</div>
           </div>
 
           <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
@@ -169,19 +169,19 @@ function LoginScreen({ onLogin, error }) {
               placeholder="Enter PIN"
               required
               style={{
-                padding: '14px 16px', borderRadius: 12, border: '1px solid #d5dde5',
+                padding: '14px 16px', borderRadius: 12, border: '1px solid var(--c-border-strong)',
                 fontSize: 18, textAlign: 'center', letterSpacing: '0.3em',
-                outline: 'none', fontWeight: 700
+                outline: 'none', fontWeight: 700, background: 'var(--c-surface)', color: 'var(--c-ink)'
               }}
-              onFocus={e => e.target.style.borderColor = '#1d4f2f'}
-              onBlur={e => e.target.style.borderColor = '#d5dde5'}
+              onFocus={e => e.target.style.borderColor = 'var(--c-primary)'}
+              onBlur={e => e.target.style.borderColor = 'var(--c-border-strong)'}
             />
             <button
               type="submit"
               disabled={loading}
               style={{
                 border: 'none', borderRadius: 12, padding: '14px 16px',
-                background: loading ? '#a0b0a0' : '#1d4f2f', color: '#fff',
+                background: loading ? 'var(--c-muted-2)' : 'var(--c-primary-button)', color: 'var(--c-on-primary)',
                 fontWeight: 700, cursor: loading ? 'wait' : 'pointer', fontSize: 15
               }}
             >
@@ -191,8 +191,8 @@ function LoginScreen({ onLogin, error }) {
 
           {error && (
             <div style={{
-              marginTop: 14, padding: '12px 14px', background: '#ffebee',
-              borderRadius: 10, color: '#c62828', fontWeight: 600, fontSize: 13, textAlign: 'center'
+              marginTop: 14, padding: '12px 14px', background: 'var(--tint-expense)',
+              borderRadius: 10, color: 'var(--c-expense)', fontWeight: 600, fontSize: 13, textAlign: 'center'
             }}>
               {error}
             </div>
@@ -205,7 +205,7 @@ function LoginScreen({ onLogin, error }) {
 
 // ── Collector Dashboard ──
 function CollectorDashboard({ data, onLogout }) {
-  if (!data?.collectors) return <div style={{ color: '#8898aa', textAlign: 'center', padding: 40 }}>No data</div>
+  if (!data?.collectors) return <div style={{ color: 'var(--c-muted-2)', textAlign: 'center', padding: 40 }}>No data</div>
 
   const myName = data.collectors[0]?.name || 'Unknown'
   const myData = data.collectors.find(c => c.name === myName) || data.collectors[0]
@@ -214,25 +214,25 @@ function CollectorDashboard({ data, onLogout }) {
     <div style={{ display: 'grid', gap: 20 }}>
       <ChartShell title={`Collector: ${myName}`} subtitle="Your collection summary">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <div style={{ color: '#5f6b7a', fontSize: 14 }}>View your collection summary and recent entries.</div>
+          <div style={{ color: 'var(--c-muted)', fontSize: 14 }}>View your collection summary and recent entries.</div>
           <button onClick={onLogout} style={{
-            border: '1px solid #d5dde5', borderRadius: 10, padding: '10px 16px',
-            background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#c62828', fontSize: 13
+            border: '1px solid var(--c-border-strong)', borderRadius: 10, padding: '10px 16px',
+            background: 'var(--c-surface)', cursor: 'pointer', fontWeight: 700, color: 'var(--c-expense)', fontSize: 13
           }}>
             Sign Out
           </button>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-          <div style={{ background: '#f8fafc', borderRadius: 14, padding: '18px 20px', border: '1px solid #eef2f5' }}>
-            <div style={{ fontSize: 11, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Income</div>
+          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Income</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.income, marginTop: 8 }}>{formatTaka(myData.income)}</div>
           </div>
-          <div style={{ background: '#f8fafc', borderRadius: 14, padding: '18px 20px', border: '1px solid #eef2f5' }}>
-            <div style={{ fontSize: 11, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transactions</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: '#213143', marginTop: 8 }}>{myData.count}</div>
+          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transactions</div>
+            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--c-ink)', marginTop: 8 }}>{myData.count}</div>
           </div>
-          <div style={{ background: '#f8fafc', borderRadius: 14, padding: '18px 20px', border: '1px solid #eef2f5' }}>
-            <div style={{ fontSize: 11, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg per Entry</div>
+          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg per Entry</div>
             <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.balance, marginTop: 8 }}>{formatTaka(myData.count ? myData.income / myData.count : 0)}</div>
           </div>
         </div>
@@ -244,20 +244,20 @@ function CollectorDashboard({ data, onLogout }) {
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
-              <tr style={{ borderBottom: '2px solid #e8ecef' }}>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: '#506174', textTransform: 'uppercase' }}>Date</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: '#506174', textTransform: 'uppercase' }}>Category</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right', fontSize: 12, color: '#506174', textTransform: 'uppercase' }}>Amount</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: '#506174', textTransform: 'uppercase' }}>Note</th>
+              <tr style={{ borderBottom: '2px solid var(--c-border-strong)' }}>
+                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Date</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Category</th>
+                <th style={{ padding: '12px 14px', textAlign: 'right', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Amount</th>
+                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Note</th>
               </tr>
             </thead>
             <tbody>
               {myData.transactions?.slice(0, 20).map((t, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f1f3f6' }}>
-                  <td style={{ padding: '12px 14px', color: '#344150' }}>{t.date}</td>
-                  <td style={{ padding: '12px 14px', color: '#344150' }}>{t.category}</td>
+                <tr key={i} style={{ borderBottom: '1px solid var(--c-border)' }}>
+                  <td style={{ padding: '12px 14px', color: 'var(--c-ink-2)' }}>{t.date}</td>
+                  <td style={{ padding: '12px 14px', color: 'var(--c-ink-2)' }}>{t.category}</td>
                   <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: COLORS.income }}>{formatTaka(t.amount)}</td>
-                  <td style={{ padding: '12px 14px', color: '#5f6b7a', fontSize: 13 }}>{t.note}</td>
+                  <td style={{ padding: '12px 14px', color: 'var(--c-muted)', fontSize: 13 }}>{t.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -278,10 +278,10 @@ function AdminDashboard({ data, onLogout }) {
     <div style={{ display: 'grid', gap: 20 }}>
       <ChartShell title="Admin Panel" subtitle="Full mosque administration">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ color: '#5f6b7a', fontSize: 14 }}>Manage collectors, view all collections, and add transactions.</div>
+          <div style={{ color: 'var(--c-muted)', fontSize: 14 }}>Manage collectors, view all collections, and add transactions.</div>
           <button onClick={onLogout} style={{
-            border: '1px solid #d5dde5', borderRadius: 10, padding: '10px 16px',
-            background: '#fff', cursor: 'pointer', fontWeight: 700, color: '#c62828', fontSize: 13
+            border: '1px solid var(--c-border-strong)', borderRadius: 10, padding: '10px 16px',
+            background: 'var(--c-surface)', cursor: 'pointer', fontWeight: 700, color: 'var(--c-expense)', fontSize: 13
           }}>
             Sign Out
           </button>
@@ -291,13 +291,13 @@ function AdminDashboard({ data, onLogout }) {
       {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
         {[
-          { label: 'Collectors', value: collectors.length, color: '#213143' },
+          { label: 'Collectors', value: collectors.length, color: 'var(--c-ink)' },
           { label: 'Total Income', value: formatTaka(totalIncome), color: COLORS.income },
           { label: 'Total Expense', value: formatTaka(totalExpense), color: COLORS.expense },
           { label: 'Balance', value: formatTaka(totalIncome - totalExpense), color: totalIncome >= totalExpense ? COLORS.balance : COLORS.expense },
         ].map(k => (
-          <div key={k.label} style={{ background: '#fff', borderRadius: 16, padding: '18px 20px', boxShadow: '0 10px 25px rgba(14,29,20,0.06)', border: '1px solid #eef2f5' }}>
-            <div style={{ fontSize: 12, color: '#8898aa', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
+          <div key={k.label} style={{ background: 'var(--c-surface)', borderRadius: 16, padding: '18px 20px', boxShadow: 'var(--shadow-card)', border: '1px solid var(--c-border)' }}>
+            <div style={{ fontSize: 12, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
             <div style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 8 }}>{k.value}</div>
           </div>
         ))}
@@ -311,15 +311,15 @@ function AdminDashboard({ data, onLogout }) {
           {collectors.map(c => {
             const pct = c.income > 0 ? Math.min(100, Math.round((c.income / Math.max(...collectors.map(x => x.income))) * 100)) : 0
             return (
-              <div key={c.name} style={{ background: '#f8fafc', borderRadius: 14, padding: '16px 18px', border: '1px solid #eef2f5' }}>
+              <div key={c.name} style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '16px 18px', border: '1px solid var(--c-border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontWeight: 800, color: '#213143' }}>{c.name}</div>
-                  <div style={{ fontSize: 13, color: '#8898aa' }}>{c.count} entries</div>
+                  <div style={{ fontWeight: 800, color: 'var(--c-ink)' }}>{c.name}</div>
+                  <div style={{ fontSize: 13, color: 'var(--c-muted-2)' }}>{c.count} entries</div>
                 </div>
-                <div style={{ height: 10, borderRadius: 999, background: '#e8edf3', overflow: 'hidden' }}>
+                <div style={{ height: 10, borderRadius: 999, background: 'var(--c-border-strong)', overflow: 'hidden' }}>
                   <div style={{ width: `${pct}%`, height: '100%', background: COLORS.income, borderRadius: 999, transition: 'width 0.6s' }} />
                 </div>
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#5f6b7a' }}>
+                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--c-muted)' }}>
                   <span>Income: <strong style={{ color: COLORS.income }}>{formatTaka(c.income)}</strong></span>
                   <span>Expense: <strong style={{ color: COLORS.expense }}>{formatTaka(c.expense)}</strong></span>
                 </div>
@@ -330,7 +330,7 @@ function AdminDashboard({ data, onLogout }) {
       </ChartShell>
 
       <ChartShell title="Internal Notes" subtitle="Administrative reminders">
-        <ul style={{ margin: 0, paddingLeft: 20, color: '#344150', lineHeight: 1.8 }}>
+        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--c-ink-2)', lineHeight: 1.8 }}>
           {NOTES.map((note, i) => <li key={i}>{note}</li>)}
         </ul>
       </ChartShell>
@@ -348,8 +348,8 @@ export default function Admin() {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <div style={{ width: 40, height: 40, border: '4px solid #e8f5e9', borderTopColor: '#2E7D32', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
-        <div style={{ color: '#8898aa' }}>Checking access…</div>
+        <div style={{ width: 40, height: 40, border: '4px solid var(--c-primary-soft)', borderTopColor: 'var(--c-income)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
+        <div style={{ color: 'var(--c-muted-2)' }}>Checking access…</div>
       </div>
     )
   }
