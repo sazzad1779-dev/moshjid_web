@@ -1,18 +1,16 @@
 import React, { useState } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
 import ChartShell from '../components/ChartShell.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import { useCollectorData } from '../hooks/useCollectorData.js'
 import { formatTaka } from '../utils/formatters.js'
 import { COLORS } from '../constants.js'
+import { useTransactions } from '../hooks/TransactionsProvider.jsx'
+import AdminWorkspace from './AdminWorkspace.jsx'
 
 const INCOME_CATEGORIES = ['Regular Donation', 'Friday Collection', 'Zakat', 'Sadaqah', 'Special Donation', 'Other Income']
 const EXPENSE_CATEGORIES = ['Electricity Bill', 'Water Bill', 'Maintenance', 'Salary', 'Cleaning', 'Stationery', 'Other Expense']
 const PAYMENT_METHODS = ['Cash (নগদ)', 'Bank Transfer (ব্যাংক ট্রান্সফার)', 'bKash (বিকাশ)', 'Nagad (নগদ)', 'Rocket (রকেট)', 'Check (চেক)']
-
-const NOTES = [
-  'Confirm the member list before publishing any collection summary.',
-  'Never share your PIN with anyone. Contact admin if you suspect compromise.',
-]
 
 const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }
 
@@ -268,81 +266,13 @@ function CollectorDashboard({ data, onLogout }) {
   )
 }
 
-// ── Admin Dashboard ──
-function AdminDashboard({ data, onLogout }) {
-  const collectors = data?.collectors || []
-  const totalIncome = collectors.reduce((s, c) => s + c.income, 0)
-  const totalExpense = collectors.reduce((s, c) => s + c.expense, 0)
-
-  return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <ChartShell title="Admin Panel" subtitle="Full mosque administration">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-          <div style={{ color: 'var(--c-muted)', fontSize: 14 }}>Manage collectors, view all collections, and add transactions.</div>
-          <button onClick={onLogout} style={{
-            border: '1px solid var(--c-border-strong)', borderRadius: 10, padding: '10px 16px',
-            background: 'var(--c-surface)', cursor: 'pointer', fontWeight: 700, color: 'var(--c-expense)', fontSize: 13
-          }}>
-            Sign Out
-          </button>
-        </div>
-      </ChartShell>
-
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        {[
-          { label: 'Collectors', value: collectors.length, color: 'var(--c-ink)' },
-          { label: 'Total Income', value: formatTaka(totalIncome), color: COLORS.income },
-          { label: 'Total Expense', value: formatTaka(totalExpense), color: COLORS.expense },
-          { label: 'Balance', value: formatTaka(totalIncome - totalExpense), color: totalIncome >= totalExpense ? COLORS.balance : COLORS.expense },
-        ].map(k => (
-          <div key={k.label} style={{ background: 'var(--c-surface)', borderRadius: 16, padding: '18px 20px', boxShadow: 'var(--shadow-card)', border: '1px solid var(--c-border)' }}>
-            <div style={{ fontSize: 12, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase' }}>{k.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: k.color, marginTop: 8 }}>{k.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <TransactionForm enteredBy="Admin" />
-
-      {/* Collector-wise Summary */}
-      <ChartShell title="Collector-wise Collections" subtitle="Summary by person">
-        <div style={{ display: 'grid', gap: 12 }}>
-          {collectors.map(c => {
-            const pct = c.income > 0 ? Math.min(100, Math.round((c.income / Math.max(...collectors.map(x => x.income))) * 100)) : 0
-            return (
-              <div key={c.name} style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '16px 18px', border: '1px solid var(--c-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontWeight: 800, color: 'var(--c-ink)' }}>{c.name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--c-muted-2)' }}>{c.count} entries</div>
-                </div>
-                <div style={{ height: 10, borderRadius: 999, background: 'var(--c-border-strong)', overflow: 'hidden' }}>
-                  <div style={{ width: `${pct}%`, height: '100%', background: COLORS.income, borderRadius: 999, transition: 'width 0.6s' }} />
-                </div>
-                <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--c-muted)' }}>
-                  <span>Income: <strong style={{ color: COLORS.income }}>{formatTaka(c.income)}</strong></span>
-                  <span>Expense: <strong style={{ color: COLORS.expense }}>{formatTaka(c.expense)}</strong></span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </ChartShell>
-
-      <ChartShell title="Internal Notes" subtitle="Administrative reminders">
-        <ul style={{ margin: 0, paddingLeft: 20, color: 'var(--c-ink-2)', lineHeight: 1.8 }}>
-          {NOTES.map((note, i) => <li key={i}>{note}</li>)}
-        </ul>
-      </ChartShell>
-    </div>
-  )
-}
-
 // ── Main Admin Page ──
 export default function Admin() {
   const { loading, authenticated, role, login, logout } = useAuth()
-  const { data } = useCollectorData({ enabled: authenticated })
+  const { data } = useCollectorData({ enabled: authenticated && role === 'collector' })
+  const { rows, status, error, refetch } = useTransactions()
   const [loginError, setLoginError] = useState('')
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -363,5 +293,8 @@ export default function Admin() {
   }
 
   if (role === 'collector') return <CollectorDashboard data={data} onLogout={logout} />
-  return <AdminDashboard data={data} onLogout={logout} />
+  if (location.pathname === '/admin' || location.pathname === '/admin/') {
+    return <Navigate to="/admin/overview" replace />
+  }
+  return <AdminWorkspace rows={rows} transactionStatus={status} transactionError={error} onRetryTransactions={refetch} onLogout={logout} transactionForm={<TransactionForm enteredBy="Admin" />} />
 }

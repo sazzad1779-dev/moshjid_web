@@ -39,7 +39,7 @@ export default function App() {
     <TransactionsProvider>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/admin" element={
+          <Route path="/admin/*" element={
             <Suspense fallback={<PageLoader />}>
               <Admin />
             </Suspense>
