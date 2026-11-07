@@ -1,12 +1,10 @@
 import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
+import { getEnumValues } from './_enum-values.js'
 import { getSecret, applyCors, readSessionToken } from './_security.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-const VALID_TYPES = ['income', 'expense', 'other']
-const VALID_METHODS = ['cash', 'bkash', 'nagad', 'bank', 'card', 'other']
 
 // Form display labels → cloud `payment_method` enum values
 const PAYMENT_METHOD_MAP = {
@@ -42,7 +40,9 @@ function slugify(name) {
 }
 
 function authEmailFor(name) {
-  return `${slugify(name)}@moshjid.local`
+  const slug = slugify(name)
+  const local = slug && slug !== 'collector' ? slug : `member-${crypto.randomUUID()}`
+  return `${local}@moshjid.local`
 }
 
 async function createAuthUser(name) {
@@ -100,32 +100,32 @@ async function resolveProfile(pool, name, role) {
   return userId
 }
 
+
+async function resolveMemberProfile(pool, name) {
+  const found = await pool.query(
+    `SELECT id FROM profiles WHERE full_name = $1 AND role::text = 'member' AND status::text = 'active' AND is_deleted = false ORDER BY created_at DESC LIMIT 1`,
+    [name]
+  )
+  if (found.rows[0]) return { id: found.rows[0].id, isNew: false }
+
+  const inserted = await pool.query(
+    `INSERT INTO profiles (full_name, role, status)
+     VALUES ($1, 'member'::user_role, 'active'::user_status)
+     RETURNING id`,
+    [name]
+  )
+  return { id: inserted.rows[0].id, isNew: true }
+}
+
 async function resolveCategoryId(pool, name, type) {
   const found = await pool.query(
-    `SELECT id FROM transaction_categories WHERE name = $1 AND type = $2::transaction_type LIMIT 1`,
+    `SELECT id FROM transaction_categories
+      WHERE name = $1 AND type::text = $2 AND is_active = true
+      LIMIT 1`,
     [name, type]
   )
   if (found.rows[0]) return found.rows[0].id
-
-  try {
-    const inserted = await pool.query(
-      `INSERT INTO transaction_categories (name, type, is_active)
-       VALUES ($1, $2::transaction_type, true)
-       RETURNING id`,
-      [name, type]
-    )
-    return inserted.rows[0].id
-  } catch (err) {
-    // Unique violation (race) → re-fetch
-    if (err.code === '23505') {
-      const again = await pool.query(
-        `SELECT id FROM transaction_categories WHERE name = $1 AND type = $2::transaction_type LIMIT 1`,
-        [name, type]
-      )
-      if (again.rows[0]) return again.rows[0].id
-    }
-    throw err
-  }
+  throw new Error('Invalid category')
 }
 
 async function getReceiptPrefix(pool) {
@@ -153,23 +153,22 @@ export default async function handler(req, res) {
   const session = await verifyAuth(req)
   if (!session) { res.status(401).json({ error: 'Unauthorized' }); return }
 
-  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName } = req.body || {}
+  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId } = req.body || {}
 
-  if (!date || !type || !category || !description || !amount || !enteredBy) {
+  if (!date || !type || !category || !amount || !enteredBy) {
     res.status(400).json({ error: 'Missing required fields' })
     return
   }
   // Cloud schema requires every row to reference a member or carry a donor name
   const donor = String(donorName || '').trim()
-  if (!donor) {
-    res.status(400).json({ error: 'Donor / payee name is required' })
+  let selectedMemberId = memberId || null
+  if (selectedMemberId && (typeof selectedMemberId !== 'string' || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(selectedMemberId))) {
+    res.status(400).json({ error: 'Invalid member' })
     return
   }
-  if (!VALID_TYPES.includes(type)) {
-    res.status(400).json({ error: `Invalid type: ${type}` })
-    return
+  if (!selectedMemberId && !donor) {
+    // allow anonymous transactions without member/donor (member_id and donor_name both null is allowed by schema)
   }
-
   const parsedAmount = parseFloat(String(amount).replace(/,/g, ''))
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     res.status(400).json({ error: 'Invalid amount' })
@@ -177,20 +176,43 @@ export default async function handler(req, res) {
   }
 
   // Accept raw enum value or a form display label
-  const method = VALID_METHODS.includes(paymentMethod)
-    ? paymentMethod
-    : (PAYMENT_METHOD_MAP[paymentMethod] || 'other')
+  const method = typeof paymentMethod === 'string' && Object.hasOwn(PAYMENT_METHOD_MAP, paymentMethod)
+    ? PAYMENT_METHOD_MAP[paymentMethod]
+    : typeof paymentMethod === 'string'
+      ? paymentMethod
+      : ''
 
   const collectorName = String(enteredBy).trim()
 
   try {
     const pool = getPool()
+    const [categoryTypes, enums] = await Promise.all([
+      pool.query('SELECT DISTINCT type::text AS type FROM transaction_categories WHERE is_active = true'),
+      getEnumValues(pool, ['payment_method']),
+    ])
+    if (!categoryTypes.rows.some(row => row.type === type)) throw new Error('Invalid type')
+    if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
+    if (selectedMemberId) {
+      const memberResult = await pool.query(
+        `SELECT id FROM profiles
+          WHERE id = $1::uuid AND role::text = 'member'
+            AND status::text = 'active' AND is_deleted = false`,
+        [selectedMemberId]
+      )
+      if (!memberResult.rows[0]) throw new Error('Invalid member')
+    }
+    let isNewMember = false
+    if (!selectedMemberId && donor) {
+      const resolved = await resolveMemberProfile(pool, donor)
+      selectedMemberId = resolved.id
+      isNewMember = resolved.isNew
+    }
+    const categoryId = await resolveCategoryId(pool, category, type)
     const profileId = await resolveProfile(pool, collectorName, session.role)
     const collectorId = session.role === 'collector' ? profileId : null
     const prefix = await getReceiptPrefix(pool)
-    const categoryId = await resolveCategoryId(pool, category, type)
 
-    const combinedNote = `${description}${notes ? ' | ' + notes : ''}`
+    const combinedNote = [description, notes].filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(' | ')
 
     let inserted = null
     for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
@@ -199,11 +221,11 @@ export default async function handler(req, res) {
         const { rows } = await pool.query(
           `INSERT INTO transactions
              (date, category_id, amount, description, payment_method, status,
-              entered_by, collector_id, receipt_number, donor_name)
-           VALUES ($1, $2, $3, $4, $5::payment_method,
-                   'confirmed'::transaction_status, $6, $7, $8, $9)
+              entered_by, collector_id, receipt_number, donor_name, member_id)
+           VALUES ($1::date, $2::uuid, $3::numeric, $4, $5::payment_method,
+                   'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
            RETURNING id, receipt_number`,
-          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, donor]
+          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
         )
         inserted = rows[0]
       } catch (err) {
@@ -213,9 +235,13 @@ export default async function handler(req, res) {
       }
     }
 
-    res.status(201).json({ success: true, id: inserted.id, receiptNumber: inserted.receipt_number })
+    res.status(201).json({ success: true, id: inserted.id, receiptNumber: inserted.receipt_number, memberId: selectedMemberId, newMember: isNewMember })
   } catch (err) {
     console.error('Add transaction error:', err)
+    if (err instanceof Error && err.message.startsWith('Invalid ')) {
+      res.status(400).json({ error: err.message })
+      return
+    }
     res.status(500).json({ error: err.message })
   }
 }

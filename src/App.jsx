@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import Layout from './components/Layout.jsx'
 import PageLoader from './components/PageLoader.jsx'
 import Hero from './components/Hero.jsx'
@@ -35,8 +35,9 @@ function PublicPages() {
 }
 
 export default function App() {
+  const { pathname } = useLocation()
   return (
-    <TransactionsProvider>
+    <TransactionsProvider enabled={!pathname.startsWith('/admin')}>
       <Routes>
         <Route element={<Layout />}>
           <Route path="/admin/*" element={

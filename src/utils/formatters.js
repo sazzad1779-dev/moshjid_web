@@ -14,7 +14,7 @@ export const formatDate = (dateStr) => {
   if (!dateStr) return '-'
   const d = new Date(dateStr)
   if (isNaN(d)) return dateStr
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 export const formatPercent = (value, decimals = 1) => {

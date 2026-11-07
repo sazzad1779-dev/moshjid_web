@@ -26,7 +26,7 @@ async function fetchTransactions() {
 
 const TransactionsContext = createContext(null)
 
-export function TransactionsProvider({ children }) {
+export function TransactionsProvider({ children, enabled = true }) {
   const [state, setState] = useState({
     rows: cache.rows || [],
     status: cache.rows ? 'ready' : cache.status === 'error' ? 'error' : 'loading',
@@ -68,12 +68,12 @@ export function TransactionsProvider({ children }) {
 
   useEffect(() => {
     mountedRef.current = true
-    if (!cache.rows) fetchData()
+    if (enabled && !cache.rows) fetchData()
     return () => {
       mountedRef.current = false
       controllerRef.current?.abort()
     }
-  }, [fetchData])
+  }, [enabled, fetchData])
 
   const summary = computeSummary(state.rows)
   const categories = useCallback(

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import {
   ArrowLeftRight, CalendarDays, ChevronRight, LayoutDashboard, LogOut,
@@ -9,7 +9,7 @@ import AdminMembers from './admin/AdminMembers.jsx'
 import AdminTransactions from './admin/AdminTransactions.jsx'
 import AdminDonations from './admin/AdminDonations.jsx'
 import AdminSettings from './admin/AdminSettings.jsx'
-import { INITIAL_SETTINGS, SAMPLE_MEMBERS, TransactionDataStatus } from './admin/AdminShared.jsx'
+import { INITIAL_SETTINGS } from './admin/AdminShared.jsx'
 import './AdminWorkspace.css'
 
 const NAV_ITEMS = [
@@ -20,13 +20,9 @@ const NAV_ITEMS = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
-export default function AdminWorkspace({ rows = [], transactionStatus, transactionError, onRetryTransactions, onLogout, transactionForm }) {
+export default function AdminWorkspace({ onLogout, transactionForm }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
-  const [members, setMembers] = useState(SAMPLE_MEMBERS)
-  const [transactions, setTransactions] = useState(rows)
   const [settings, setSettings] = useState(INITIAL_SETTINGS)
-
-  useEffect(() => setTransactions(rows), [rows])
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -48,7 +44,7 @@ export default function AdminWorkspace({ rows = [], transactionStatus, transacti
         <nav className="admin-side-nav" aria-label="Admin pages">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
             <NavLink key={id} to={`/admin/${id}`} end className={({ isActive }) => isActive ? 'is-active' : ''} onClick={() => setMobileNavOpen(false)}>
-              <Icon size={18} /><span>{label}</span>{id === 'members' && <small>{members.length}</small>}
+              <Icon size={18} /><span>{label}</span>
             </NavLink>
           ))}
         </nav>
@@ -60,11 +56,10 @@ export default function AdminWorkspace({ rows = [], transactionStatus, transacti
       {mobileNavOpen && <button className="admin-sidebar-overlay" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)} />}
       <main className="admin-main">
         <div className="admin-content">
-          <TransactionDataStatus status={transactionStatus} error={transactionError} count={rows.length} onRetry={onRetryTransactions} />
           <Routes>
-            <Route path="overview" element={<AdminOverview members={members} transactions={transactions} onNavigate={navigateToPage} />} />
-            <Route path="members" element={<AdminMembers members={members} setMembers={setMembers} />} />
-            <Route path="transactions" element={<AdminTransactions transactions={transactions} setTransactions={setTransactions} transactionForm={transactionForm} />} />
+            <Route path="overview" element={<AdminOverview onNavigate={navigateToPage} />} />
+            <Route path="members" element={<AdminMembers />} />
+            <Route path="transactions" element={<AdminTransactions transactionForm={transactionForm} />} />
             <Route path="donations" element={<AdminDonations />} />
             <Route path="settings" element={<AdminSettings settings={settings} setSettings={setSettings} />} />
             <Route path="*" element={<Navigate to="/admin/overview" replace />} />
