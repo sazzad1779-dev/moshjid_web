@@ -1,4 +1,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { dedupeRequest } from '../utils/inFlightRequests.js'
+import { getRequestErrorMessage } from '../utils/requestErrors.js'
+
+const REQUEST_TIMEOUT_MS = 12000
+
+function fetchAdminResource(search) {
+  return dedupeRequest(`/api/admin-data?${search}`, async () => {
+    const response = await fetch(`/api/admin-data?${search}`, {
+      credentials: 'include',
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      cache: 'no-store',
+    })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
+    return data
+  })
+}
 
 export default function useAdminResource(resource, params = {}) {
   const paramsKey = JSON.stringify(params)
@@ -13,27 +30,16 @@ export default function useAdminResource(resource, params = {}) {
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
-    const controller = new AbortController()
+    let active = true
     setResult(current => ({ ...current, status: 'loading', error: null }))
 
-    fetch(`/api/admin-data?${search}`, {
-      credentials: 'include',
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-      .then(async response => {
-        const data = await response.json()
-        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
-        return data
-      })
+    fetchAdminResource(search)
       .then(data => setResult({ data, status: 'ready', error: null }))
       .catch(error => {
-        if (error.name !== 'AbortError') {
-          setResult(current => ({ ...current, status: 'error', error: error.message }))
-        }
+        if (active) setResult(current => ({ ...current, status: 'error', error: getRequestErrorMessage(error) }))
       })
 
-    return () => controller.abort()
+    return () => { active = false }
   }, [search, refreshKey])
 
   const refetch = useCallback(() => setRefreshKey(key => key + 1), [])

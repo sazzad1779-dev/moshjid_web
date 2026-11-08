@@ -19,9 +19,25 @@ function PublicPages() {
     return <PageLoader />
   }
 
+  if (status === 'error' && !rows.length) {
+    return (
+      <div className="page-error" role="alert">
+        <h2>We couldn’t load the mosque finance data</h2>
+        <p>{error}</p>
+        <button type="button" onClick={refetch}>Try again</button>
+      </div>
+    )
+  }
+
   return (
     <>
       <Hero balance={summary.balance} totalIncome={summary.totalIncome} totalExpense={summary.totalExpense} />
+      {status === 'error' && (
+        <div className="page-error page-error--inline" role="alert">
+          <span>Couldn’t refresh the data: {error}</span>
+          <button type="button" onClick={refetch}>Try again</button>
+        </div>
+      )}
       <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Home rows={rows} summary={summary} categories={categories} />} />

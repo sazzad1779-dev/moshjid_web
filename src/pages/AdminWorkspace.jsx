@@ -16,7 +16,7 @@ const NAV_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'members', label: 'Members', icon: Users },
   { id: 'transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { id: 'donations', label: 'Monthly donations', icon: CalendarDays },
+  { id: 'donations', label: 'Monthly dues', icon: CalendarDays },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 

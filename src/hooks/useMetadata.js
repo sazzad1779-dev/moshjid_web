@@ -1,4 +1,19 @@
 import { useEffect, useState } from 'react'
+import { dedupeRequest } from '../utils/inFlightRequests.js'
+import { getRequestErrorMessage } from '../utils/requestErrors.js'
+
+function fetchMetadata() {
+  return dedupeRequest('/api/options', async () => {
+    const response = await fetch('/api/options', {
+      credentials: 'include',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(12000),
+    })
+    const payload = await response.json()
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
+    return payload
+  })
+}
 
 export default function useMetadata() {
   const [data, setData] = useState(null)
@@ -9,12 +24,7 @@ export default function useMetadata() {
     let active = true
     setStatus('loading')
     setError('')
-    fetch('/api/options', { credentials: 'include', cache: 'no-store' })
-      .then(async response => {
-        const payload = await response.json()
-        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
-        return payload
-      })
+    fetchMetadata()
       .then(payload => {
         if (active) {
           setData(payload)
@@ -23,7 +33,7 @@ export default function useMetadata() {
       })
       .catch(fetchError => {
         if (active) {
-          setError(fetchError.message || 'Failed to load database options.')
+          setError(getRequestErrorMessage(fetchError))
           setStatus('error')
         }
       })

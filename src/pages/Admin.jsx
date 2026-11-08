@@ -431,8 +431,19 @@ function LoginScreen({ onLogin, error }) {
 }
 
 // ── Collector Dashboard ──
-function CollectorDashboard({ data, onLogout }) {
-  if (!data?.collectors) return <div style={{ color: 'var(--c-muted-2)', textAlign: 'center', padding: 40 }}>No data</div>
+function CollectorDashboard({ data, status, error, onRetry, onLogout }) {
+  if (status === 'loading') {
+    return <div role="status" style={{ color: 'var(--c-muted-2)', textAlign: 'center', padding: 40 }}>Loading collection data…</div>
+  }
+  if (status === 'error') {
+    return (
+      <div role="alert" style={{ display: 'grid', justifyItems: 'center', gap: 12, color: 'var(--c-expense)', textAlign: 'center', padding: 40 }}>
+        <span>Could not load collection data: {error}</span>
+        <button type="button" className="admin-button admin-button--quiet" onClick={onRetry}>Try again</button>
+      </div>
+    )
+  }
+  if (!data?.collectors) return <div style={{ color: 'var(--c-muted-2)', textAlign: 'center', padding: 40 }}>No collection data available.</div>
 
   const myName = data.collectors[0]?.name || 'Unknown'
   const myData = data.collectors.find(c => c.name === myName) || data.collectors[0]
@@ -497,8 +508,8 @@ function CollectorDashboard({ data, onLogout }) {
 
 // ── Main Admin Page ──
 export default function Admin() {
-  const { loading, authenticated, role, login, logout } = useAuth()
-  const { data } = useCollectorData({ enabled: authenticated && role === 'collector' })
+  const { loading, authenticated, role, error: authError, login, logout } = useAuth()
+  const { data, status: collectorStatus, error: collectorError, refetch: refetchCollectorData } = useCollectorData({ enabled: authenticated && role === 'collector' })
   const [loginError, setLoginError] = useState('')
   const location = useLocation()
 
@@ -517,10 +528,20 @@ export default function Admin() {
       const result = await login(pin)
       if (!result.success) setLoginError(result.error)
       return result
-    }} error={loginError} />
+    }} error={loginError || authError} />
   }
 
-  if (role === 'collector') return <CollectorDashboard data={data} onLogout={logout} />
+  if (role === 'collector') {
+    return (
+      <CollectorDashboard
+        data={data}
+        status={collectorStatus}
+        error={collectorError}
+        onRetry={refetchCollectorData}
+        onLogout={logout}
+      />
+    )
+  }
   if (location.pathname === '/admin' || location.pathname === '/admin/') {
     return <Navigate to="/admin/overview" replace />
   }

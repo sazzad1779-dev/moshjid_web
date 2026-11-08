@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { computeSummary } from '../utils/computations.js'
+import { dedupeRequest } from '../utils/inFlightRequests.js'
+import { getRequestErrorMessage } from '../utils/requestErrors.js'
 
 // Module-level cache shared across all provider instances (and remounts).
 let cache = {
@@ -9,19 +11,14 @@ let cache = {
   lastUpdated: null,
 }
 
-// In-flight request dedupe — one shared promise per fetch window.
-let inFlight = null
-
-async function fetchTransactions() {
-  if (inFlight) return inFlight
-  inFlight = (async () => {
+function fetchTransactions() {
+  return dedupeRequest('/api/transactions', async () => {
     const res = await fetch('/api/transactions', { signal: AbortSignal.timeout(12000) })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
     if (data.error) throw new Error(data.error)
     return data
-  })().finally(() => { inFlight = null })
-  return inFlight
+  })
 }
 
 const TransactionsContext = createContext(null)
@@ -35,44 +32,35 @@ export function TransactionsProvider({ children, enabled = true }) {
   })
 
   const mountedRef = useRef(true)
-  const controllerRef = useRef(null)
-
   const fetchData = useCallback(async () => {
-    // If we already have fresh-ish data, still refresh in the background.
-    setState(s => ({ ...s, status: 'loading' }))
+    if (!cache.rows) {
+      setState(s => ({ ...s, status: 'loading', error: null }))
+    } else {
+      setState(s => ({ ...s, status: 'ready', error: null }))
+    }
 
-    const controller = new AbortController()
-    controllerRef.current = controller
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        const data = await fetchTransactions()
-        if (!mountedRef.current) return
-        cache = { rows: data.rows || [], status: 'ready', error: null, lastUpdated: data.updatedAt || null }
-        setState({
-          rows: data.rows || [],
-          status: 'ready',
-          error: null,
-          lastUpdated: data.updatedAt ? new Date(data.updatedAt) : new Date(),
-        })
-        return
-      } catch (err) {
-        if (attempt === 1) {
-          if (!mountedRef.current) return
-          cache = { ...cache, status: 'error', error: err.message }
-          setState(s => ({ ...s, status: 'error', error: err.message }))
-        }
-      }
+    try {
+      const data = await fetchTransactions()
+      if (!mountedRef.current) return
+      cache = { rows: data.rows || [], status: 'ready', error: null, lastUpdated: data.updatedAt || null }
+      setState({
+        rows: data.rows || [],
+        status: 'ready',
+        error: null,
+        lastUpdated: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+      })
+    } catch (err) {
+      if (!mountedRef.current) return
+      const error = getRequestErrorMessage(err)
+      cache = { ...cache, status: 'error', error }
+      setState(s => ({ ...s, status: 'error', error }))
     }
   }, [])
 
   useEffect(() => {
     mountedRef.current = true
     if (enabled && !cache.rows) fetchData()
-    return () => {
-      mountedRef.current = false
-      controllerRef.current?.abort()
-    }
+    return () => { mountedRef.current = false }
   }, [enabled, fetchData])
 
   const summary = computeSummary(state.rows)

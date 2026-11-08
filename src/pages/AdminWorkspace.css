@@ -805,10 +805,14 @@
 }
 
 .admin-status--suspended,
-.admin-status--unpaid,
-.admin-status--waived {
+.admin-status--unpaid {
   color: var(--c-expense);
   background: var(--tint-expense);
+}
+
+.admin-status--waived {
+  color: var(--c-muted);
+  background: var(--c-surface-3);
 }
 
 .admin-status--partial {
@@ -1121,14 +1125,184 @@
   text-align: right;
 }
 
+.admin-donation-table {
+  min-width: 1160px;
+}
+
+.admin-donation-heading {
+  align-items: flex-start;
+}
+
+.admin-donation-filters {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.admin-donation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.admin-donation-toolbar .admin-search {
+  width: min(360px, 100%);
+}
+
+.admin-donation-hint {
+  color: var(--c-muted-2);
+  font-size: 10px;
+}
+
 .admin-donation-table th:first-child,
 .admin-donation-table th:nth-child(2) {
   text-align: left;
 }
 
+.admin-dues-member-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 6px 2px 0;
+  color: var(--c-ink);
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.admin-dues-member-link:hover strong {
+  color: var(--admin-green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.admin-dues-member-link > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.admin-dues-member-link strong {
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.admin-dues-member-link small {
+  text-align: left;
+}
+
+.admin-dues-month-cell {
+  min-width: 76px;
+  text-align: center;
+}
+
+.admin-dues-month-content {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.admin-dues-month-content .admin-status {
+  padding: 3px 6px;
+  font-size: 8px;
+  text-transform: capitalize;
+}
+
+.admin-dues-month-content small {
+  color: var(--c-muted);
+  font-size: 9px;
+}
+
+.admin-dues-no-record {
+  color: var(--c-muted-2);
+}
+
+.admin-dues-balance {
+  color: var(--c-warning);
+  font-weight: 700;
+}
+
 .admin-paid-amount {
   color: var(--c-income);
   font-weight: 650;
+}
+
+.admin-dues-member-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 15px 0;
+}
+
+.admin-dues-member-meta span {
+  padding: 6px 9px;
+  color: var(--c-muted);
+  font-size: 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-surface-2);
+}
+
+.admin-dues-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-bottom: 17px;
+}
+
+.admin-dues-detail-stats > div {
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: var(--c-surface-2);
+}
+
+.admin-dues-detail-stats span,
+.admin-dues-detail-heading span {
+  color: var(--c-muted-2);
+  font-size: 10px;
+}
+
+.admin-dues-detail-stats strong {
+  color: var(--c-ink);
+  font-size: 13px;
+}
+
+.admin-dues-detail-stats .is-paid {
+  color: var(--c-income);
+}
+
+.admin-dues-detail-stats .is-balance {
+  color: var(--c-warning);
+}
+
+.admin-dues-detail-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.admin-dues-detail-heading strong {
+  color: var(--c-ink);
+  font-size: 12px;
+}
+
+.admin-dues-detail-table {
+  white-space: normal;
+}
+
+.admin-waived-reason {
+  display: block;
+  max-width: 170px;
+  margin-top: 4px;
+  white-space: normal;
 }
 
 .admin-unpaid {
@@ -1366,6 +1540,24 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .admin-donation-heading {
+    flex-direction: column;
+  }
+
+  .admin-donation-filters {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .admin-donation-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .admin-donation-toolbar .admin-search {
+    width: 100%;
+  }
+
   .admin-footer {
     padding-right: 14px;
     padding-left: 14px;
@@ -1425,6 +1617,39 @@
 
   .admin-donation-heading {
     align-items: flex-start;
+  }
+
+  .admin-donation-filters {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-donation-filters .admin-button {
+    width: 100%;
+  }
+
+  .admin-donation-filters .admin-select-label {
+    justify-content: space-between;
+  }
+
+  .admin-donation-filters .admin-select-label select {
+    flex: 1;
+  }
+
+  .admin-donation-hint {
+    line-height: 1.5;
+  }
+
+  .admin-dues-detail-stats {
+    gap: 5px;
+  }
+
+  .admin-dues-detail-stats > div {
+    padding: 8px;
+  }
+
+  .admin-dues-detail-stats strong {
+    font-size: 11px;
   }
 
   .admin-table th,

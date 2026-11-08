@@ -611,6 +611,178 @@ async function getDueDetail(pool, id) {
   }
 }
 
+
+async function getDuesMatrix(pool, searchParams) {
+  const year = getIntegerParam(searchParams, 'year', new Date().getFullYear(), 2000, 2200)
+  const page = getIntegerParam(searchParams, 'page', 1, 1, 100000)
+  const pageSize = getIntegerParam(searchParams, 'pageSize', 25, 1, 100)
+  const search = (searchParams.get('search') || '').trim()
+  if (search.length > 100) throw new Error('Invalid search')
+
+  const totalResult = await pool.query(
+    `SELECT count(*) FILTER (
+              WHERE $2::text IS NULL
+                 OR p.full_name ILIKE '%' || $2 || '%'
+                 OR COALESCE(p.member_code, '') ILIKE '%' || $2 || '%'
+                 OR COALESCE(p.phone, '') ILIKE '%' || $2 || '%'
+            )::int AS total,
+            count(*)::int AS member_count
+       FROM profiles p
+      WHERE p.role::text = 'member'
+        AND (
+          (p.status::text = 'active'
+            AND p.approval_status::text = 'approved'
+            AND COALESCE(p.is_deleted, false) = false)
+          OR EXISTS (
+            SELECT 1
+              FROM monthly_dues md
+             WHERE md.member_id = p.id
+               AND md.period >= make_date($1, 1, 1)
+               AND md.period < make_date($1 + 1, 1, 1)
+          )
+        )`,
+    [year, search || null]
+  )
+  const total = totalResult.rows[0].total
+  const memberCount = totalResult.rows[0].member_count
+
+  const membersResult = await pool.query(
+    `SELECT p.id::text AS id, p.full_name AS member_name, p.member_code,
+            p.phone, p.email, p.monthly_amount
+       FROM profiles p
+      WHERE p.role::text = 'member'
+        AND (
+          (p.status::text = 'active'
+            AND p.approval_status::text = 'approved'
+            AND COALESCE(p.is_deleted, false) = false)
+          OR EXISTS (
+            SELECT 1
+              FROM monthly_dues md
+             WHERE md.member_id = p.id
+               AND md.period >= make_date($1, 1, 1)
+               AND md.period < make_date($1 + 1, 1, 1)
+          )
+        )
+        AND ($2::text IS NULL
+          OR p.full_name ILIKE '%' || $2 || '%'
+          OR COALESCE(p.member_code, '') ILIKE '%' || $2 || '%'
+          OR COALESCE(p.phone, '') ILIKE '%' || $2 || '%')
+      ORDER BY p.full_name ASC
+      LIMIT $3 OFFSET $4`,
+    [year, search || null, pageSize, (page - 1) * pageSize]
+  )
+
+  const memberIds = membersResult.rows.map(row => row.id)
+
+  const duesResult = memberIds.length
+    ? await pool.query(
+        `SELECT md.id::text AS id, md.member_id::text AS member_id,
+                EXTRACT(MONTH FROM md.period)::int AS month,
+                md.amount_due, md.amount_paid, md.status::text AS status,
+                to_char(md.due_date, 'YYYY-MM-DD') AS due_date,
+                md.waived_reason
+           FROM monthly_dues md
+          WHERE md.member_id = ANY($1::uuid[])
+            AND md.period >= make_date($2, 1, 1)
+            AND md.period < make_date($2 + 1, 1, 1)`,
+        [memberIds, year]
+      )
+    : { rows: [] }
+
+  const paymentResult = memberIds.length
+    ? await pool.query(
+        `SELECT t.member_id::text AS member_id,
+                MAX(t.date) AS last_payment_date,
+                COALESCE(SUM(t.amount), 0)::numeric AS total_paid
+           FROM transactions t
+           JOIN transaction_categories tc ON tc.id = t.category_id
+          WHERE tc.type::text = 'income'
+            AND t.status::text = 'confirmed'
+            AND COALESCE(t.is_deleted, false) = false
+            AND t.member_id = ANY($1::uuid[])
+            AND t.date >= make_date($2, 1, 1)
+            AND t.date < make_date($2 + 1, 1, 1)
+            AND t.monthly_due_id IS NOT NULL
+          GROUP BY t.member_id`,
+        [memberIds, year]
+      )
+    : { rows: [] }
+
+  const duesByMember = new Map()
+  for (const row of duesResult.rows) {
+    if (!duesByMember.has(row.member_id)) duesByMember.set(row.member_id, {})
+    duesByMember.get(row.member_id)[row.month] = {
+      dueId: row.id,
+      month: row.month,
+      amountDue: Number(row.amount_due),
+      amountPaid: Number(row.amount_paid),
+      status: row.status,
+      dueDate: row.due_date,
+      waivedReason: row.waived_reason,
+    }
+  }
+  const paymentsByMember = new Map(paymentResult.rows.map(row => [row.member_id, row]))
+
+  const members = membersResult.rows.map(row => {
+    const months = duesByMember.get(row.id) || {}
+    const payment = paymentsByMember.get(row.id)
+    const activeDues = Object.values(months).filter(m => m.status !== 'waived')
+    const totalDue = activeDues.reduce((sum, m) => sum + m.amountDue, 0)
+    const totalPaid = Object.values(months).reduce((sum, m) => sum + m.amountPaid, 0)
+    const balance = activeDues.reduce(
+      (sum, m) => sum + (m.status === 'paid' ? 0 : Math.max(0, m.amountDue - m.amountPaid)),
+      0
+    )
+    return {
+      memberId: row.id,
+      memberName: row.member_name,
+      memberCode: row.member_code,
+      phone: row.phone,
+      email: row.email,
+      monthlyAmount: row.monthly_amount === null ? null : Number(row.monthly_amount),
+      months,
+      totalDue,
+      totalPaid,
+      balance,
+      lastPaymentDate: payment?.last_payment_date || null,
+      transactionTotal: payment ? Number(payment.total_paid) : 0,
+    }
+  })
+
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
+
+  const summaryResult = await pool.query(
+    `SELECT COALESCE(SUM(amount_due) FILTER (WHERE status::text <> 'waived'), 0)::numeric AS total_due,
+            COALESCE(SUM(amount_paid), 0)::numeric AS total_paid,
+            COALESCE(
+              SUM(GREATEST(amount_due - amount_paid, 0))
+                FILTER (WHERE status::text NOT IN ('paid', 'waived')),
+              0
+            )::numeric AS balance
+       FROM monthly_dues
+      WHERE period >= make_date($1, 1, 1)
+        AND period < make_date($1 + 1, 1, 1)`,
+    [year]
+  )
+
+  return {
+    year,
+    months: monthNames,
+    monthNames,
+    members,
+    page,
+    pageSize,
+    total,
+    pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    summary: {
+      memberCount,
+      totalDue: Number(summaryResult.rows[0].total_due),
+      totalPaid: Number(summaryResult.rows[0].total_paid),
+      balance: Number(summaryResult.rows[0].balance),
+    },
+  }
+}
+
 export default async function handler(req, res) {
   applyCors(res, req)
   if (req.method === 'OPTIONS') { res.status(200).end(); return }
@@ -637,6 +809,14 @@ export default async function handler(req, res) {
 
     try {
       const pool = getPool()
+      if (isDuesGeneration) {
+        const year = Number(searchParams.get('year') || new Date().getFullYear())
+        if (!Number.isInteger(year) || year < 2000 || year > 2200) throw new Error('Invalid year')
+        const result = await generateMonthlyDues(pool, year)
+        res.setHeader('Cache-Control', 'no-store')
+        res.status(200).json(result)
+        return
+      }
       const changed = isMemberMutation
         ? req.method === 'POST'
           ? await createMember(pool, req.body)
@@ -663,7 +843,7 @@ export default async function handler(req, res) {
     return
   }
 
-  if (!['overview', 'transactions', 'members', 'dues'].includes(resource)) {
+  if (!['overview', 'transactions', 'members', 'dues', 'due-detail', 'dues-matrix'].includes(resource)) {
     res.status(400).json({ error: 'Invalid resource' })
     return
   }
@@ -680,7 +860,11 @@ export default async function handler(req, res) {
         ? await getTransactions(pool, searchParams, resource)
         : resource === 'members'
           ? await getMembers(pool, searchParams)
-          : await getDues(pool, searchParams)
+          : resource === 'due-detail'
+            ? await getDueDetail(pool, searchParams.get('id'))
+            : resource === 'dues-matrix'
+              ? await getDuesMatrix(pool, searchParams)
+              : await getDues(pool, searchParams)
 
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json(data)

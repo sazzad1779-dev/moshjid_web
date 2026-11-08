@@ -613,6 +613,51 @@ textarea:focus-visible {
   animation: spin 1s linear infinite;
 }
 
+.page-error {
+  min-height: 40vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  color: var(--c-ink);
+}
+
+.page-error h2,
+.page-error p {
+  margin: 0;
+}
+
+.page-error p {
+  color: var(--c-muted);
+}
+
+.page-error button {
+  border: 0;
+  border-radius: 9px;
+  padding: 10px 16px;
+  background: var(--c-primary-button);
+  color: var(--c-on-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.page-error--inline {
+  min-height: 0;
+  flex-direction: row;
+  justify-content: space-between;
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--tint-expense-border);
+  border-radius: 9px;
+  background: var(--tint-expense);
+  color: var(--c-expense);
+  text-align: left;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
