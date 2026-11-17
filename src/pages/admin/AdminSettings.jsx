@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Check, Clock3, FileText } from 'lucide-react'
 import usePrayerTimes, { requestPrayerTimes } from '../../hooks/usePrayerTimes.js'
+import { getRequestErrorMessage } from '../../utils/requestErrors.js'
 import { PRAYER_FIELDS } from '../../utils/prayerSchedule.js'
 import { PageTitle, PreviewNotice } from './AdminShared.jsx'
 
@@ -24,7 +25,7 @@ function PrayerSettings() {
       setSaveStatus('saved')
     } catch (error) {
       setSaveStatus('error')
-      setSaveError(error.message)
+      setSaveError(getRequestErrorMessage(error))
     }
   }
 

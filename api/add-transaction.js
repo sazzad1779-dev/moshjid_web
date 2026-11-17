@@ -3,6 +3,7 @@ import { getPool } from './_db.js'
 import { getEnumValues } from './_enum-values.js'
 import { getSecret, applyCors, readSessionToken } from './_security.js'
 import { syncMonthlyDueForTransaction } from './_monthly-dues.js'
+import { resolveMemberProfile } from './_members.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -101,22 +102,6 @@ async function resolveProfile(pool, name, role) {
   return userId
 }
 
-
-async function resolveMemberProfile(pool, name) {
-  const found = await pool.query(
-    `SELECT id FROM profiles WHERE full_name = $1 AND role::text = 'member' AND status::text = 'active' AND is_deleted = false ORDER BY created_at DESC LIMIT 1`,
-    [name]
-  )
-  if (found.rows[0]) return { id: found.rows[0].id, isNew: false }
-
-  const inserted = await pool.query(
-    `INSERT INTO profiles (full_name, role, status)
-     VALUES ($1, 'member'::user_role, 'active'::user_status)
-     RETURNING id`,
-    [name]
-  )
-  return { id: inserted.rows[0].id, isNew: true }
-}
 
 async function resolveCategoryId(pool, name, type) {
   const found = await pool.query(
@@ -237,8 +222,6 @@ export default async function handler(req, res) {
         if (!memberResult.rows[0]) throw new Error('Invalid member')
       }
       if (!selectedMemberId && donor) {
-        // Concurrent transactions for the same typed name should resolve one profile.
-        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), 0)', [donor])
         const resolved = await resolveMemberProfile(client, donor)
         selectedMemberId = resolved.id
         isNewMember = resolved.isNew
@@ -277,6 +260,6 @@ export default async function handler(req, res) {
       res.status(400).json({ error: err.message })
       return
     }
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'We couldn’t save the transaction.' })
   }
 }

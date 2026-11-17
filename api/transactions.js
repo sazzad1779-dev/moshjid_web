@@ -58,6 +58,6 @@ export default async function handler(req, res) {
     res.status(200).json({ rows: mapped, count: mapped.length, updatedAt: new Date().toISOString() })
   } catch (err) {
     console.error('API Error:', err)
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ error: 'We couldn’t load the transactions.' })
   }
 }

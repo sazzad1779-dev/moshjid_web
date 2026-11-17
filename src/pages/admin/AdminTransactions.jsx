@@ -1,7 +1,11 @@
 import React, { cloneElement, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { ArrowLeftRight, Plus, Search, X } from 'lucide-react'
+import { formatDate, formatMonthLabel, formatTaka } from '../../utils/formatters.js'
 import useAdminResource from '../../hooks/useAdminResource.js'
 import useMetadata from '../../hooks/useMetadata.js'
+import AdminActionDialog from './AdminActionDialog.jsx'
+import { getRequestErrorMessage, readJsonResponse } from '../../utils/requestErrors.js'
 import {
   EmptyState, PageTitle, Pagination, TransactionTable,
 } from './AdminShared.jsx'
@@ -16,25 +20,32 @@ const EMPTY_TRANSACTION = {
   note: '',
   paymentMethod: '',
   donorName: '',
+  memberId: null,
   dueMonths: [],
   dueYear: '',
 }
 
 export default function AdminTransactions({ transactionForm }) {
+  const [searchParams] = useSearchParams()
+  const member = searchParams.get('member') || ''
+  const dueMonth = searchParams.get('dueMonth') || ''
   const [queryInput, setQueryInput] = useState('')
   const [query, setQuery] = useState('')
   const [type, setType] = useState('all')
+  const [sort, setSort] = useState('recently-added')
   const [page, setPage] = useState(1)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
   const [editForm, setEditForm] = useState(EMPTY_TRANSACTION)
   const [mutationStatus, setMutationStatus] = useState('idle')
   const [mutationError, setMutationError] = useState('')
+  const [saveMessage, setSaveMessage] = useState('')
+  const [removing, setRemoving] = useState(null)
   const [editMemberQuery, setEditMemberQuery] = useState('')
   const [editMemberSuggestions, setEditMemberSuggestions] = useState([])
   const [editMemberSearchStatus, setEditMemberSearchStatus] = useState('idle')
   const [editMemberSearchError, setEditMemberSearchError] = useState('')
-  const { data, status, error, refetch } = useAdminResource('transactions', { q: query, type, page, pageSize: 10 })
+  const { data, status, error, refetch } = useAdminResource('transactions', { q: query, type, sort, page, pageSize: 10, member, dueMonth })
   const { data: metadata, status: metadataStatus, error: metadataError } = useMetadata()
   const transactions = data?.rows || []
   const pageCount = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || 10)))
@@ -58,14 +69,13 @@ export default function AdminTransactions({ transactionForm }) {
           cache: 'no-store',
           signal: controller.signal,
         })
-        const result = await response.json()
-        if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+        const result = await readJsonResponse(response, 'We couldn’t search for members. Try typing the name again.')
         setEditMemberSuggestions(result.rows || [])
         setEditMemberSearchStatus('ready')
       } catch (error) {
         if (error.name !== 'AbortError') {
           setEditMemberSuggestions([])
-          setEditMemberSearchError(error.message || 'Failed to search members.')
+          setEditMemberSearchError(getRequestErrorMessage(error))
           setEditMemberSearchStatus('error')
         }
       }
@@ -94,7 +104,8 @@ export default function AdminTransactions({ transactionForm }) {
       amount: String(transaction.amount ?? ''),
       note: transaction.note || '',
       paymentMethod: transaction.paymentMethod || '',
-      donorName: transaction.donorName || transaction.memberName || '',
+      donorName: transaction.memberName || transaction.donorName || '',
+      memberId: transaction.memberId,
       dueMonths: transaction.dueMonths || [],
       dueYear: transaction.dueYear || Number((transaction.date || '').slice(0, 4)),
     })
@@ -108,7 +119,14 @@ export default function AdminTransactions({ transactionForm }) {
 
   const saveEdit = async event => {
     event.preventDefault()
+    const { memberId, ...fields } = editForm
+    const resolveTypedMember = isMonthlyDueCategory && !memberId && fields.donorName.trim() !== ''
+    if (isMonthlyDueCategory && !memberId && !resolveTypedMember && (editing.memberId || fields.dueMonths.length)) {
+      setMutationError('Enter a member name to assign this payment to monthly dues.')
+      return
+    }
     setMutationStatus('saving')
+    setSaveMessage('')
     setMutationError('')
     try {
       const response = await fetch('/api/admin-data?resource=transactions', {
@@ -116,44 +134,35 @@ export default function AdminTransactions({ transactionForm }) {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...editForm,
-          donorName: editForm.donorName === (editing.donorName || editing.memberName || '')
-            ? editing.donorName || ''
-            : editForm.donorName,
+          ...fields,
+          ...((memberId !== editing.memberId || resolveTypedMember) && { memberId }),
+          donorName: memberId ? '' : fields.donorName,
           id: editing.id,
           amount: Number(editForm.amount),
         }),
       })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      await readJsonResponse(response, 'We couldn’t save this transaction. Try again. If the problem continues, contact the site administrator.')
+      setSaveMessage('Transaction updated.')
       setEditing(null)
       setMutationStatus('idle')
       refetch()
     } catch (saveError) {
-      setMutationError(saveError.message || 'Failed to save transaction.')
+      setMutationError(getRequestErrorMessage(saveError))
       setMutationStatus('idle')
     }
   }
 
-  const deleteTransaction = async transaction => {
-    if (!window.confirm(`Delete transaction #${transaction.id}? This will remove it from active reports.`)) return
-    setMutationStatus('deleting')
-    setMutationError('')
-    try {
-      const response = await fetch('/api/admin-data?resource=transactions', {
-        method: 'DELETE',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: transaction.id }),
-      })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
-      refetch()
-      setMutationStatus('idle')
-    } catch (deleteError) {
-      setMutationError(deleteError.message || 'Failed to delete transaction.')
-      setMutationStatus('idle')
-    }
+  const removeRecord = async () => {
+    const response = await fetch('/api/admin-data?resource=transactions', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: removing.id }),
+      signal: AbortSignal.timeout(12000),
+    })
+    await readJsonResponse(response, 'We couldn’t remove this transaction. Try again. If the problem continues, contact the site administrator.')
+    refetch()
+    return 'This transaction was removed from the transaction list and financial reports.'
   }
 
   const updateForm = (key, value) => setEditForm(current => ({ ...current, [key]: value }))
@@ -163,26 +172,58 @@ export default function AdminTransactions({ transactionForm }) {
     <>
       <PageTitle
         title="Transactions"
-        description="View and manage transaction records stored in the database."
+        description="Find, add, and manage income and expense records."
         action={transactionForm && <button type="button" className="admin-button admin-button--primary" onClick={() => setAdding(current => !current)}>{adding ? <X size={16} /> : <Plus size={16} />}{adding ? 'Close form' : 'Add transaction'}</button>}
       />
+      {dueMonth && (
+        <div className="admin-data-status">
+          <span>Showing payments applied to {formatMonthLabel(dueMonth)}. The transaction date is when the payment was recorded.</span>
+          <Link className="text-link" to="/admin/transactions" onClick={() => {
+            setPage(1)
+            setQuery('')
+            setQueryInput('')
+            setType('all')
+          }}>View all transactions</Link>
+        </div>
+      )}
       {mutationError && !editing && <div className="admin-data-status admin-data-status--error" role="alert">{mutationError}</div>}
-      {mutationStatus === 'deleting' && <div className="admin-data-status" role="status">Deleting transaction…</div>}
+      {saveMessage && <div className="admin-data-status admin-data-status--success" role="status">{saveMessage}</div>}
       {status === 'loading' && <div className="admin-data-status" role="status">Loading transactions…</div>}
-      {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>Could not load transactions: {error || 'Unknown error'}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
+      {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>We couldn’t load the transaction list. {error}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
       {status === 'ready' && (
         <section className="admin-panel">
           <form className="admin-toolbar" onSubmit={applySearch}>
             <label className="admin-search"><Search size={17} /><input value={queryInput} onChange={event => setQueryInput(event.target.value)} placeholder="Search description, member, or receipt..." /></label>
             <select aria-label="Filter transactions by type" disabled={metadataStatus !== 'ready'} value={type} onChange={event => { setType(event.target.value); setPage(1) }}><option value="all">All types</option>{(metadata?.transactionTypes || []).map(value => <option key={value} value={value}>{value}</option>)}</select>
+            <select aria-label="Sort transactions" value={sort} onChange={event => { setSort(event.target.value); setPage(1) }}>
+              <option value="recently-added">Recently added</option>
+              <option value="transaction-date">Transaction date</option>
+            </select>
             <button type="submit" className="admin-button admin-button--primary">Search</button>
             <div className="admin-result-count">{data.total} records</div>
           </form>
           {transactions.length
-            ? <TransactionTable transactions={transactions} onEdit={startEditing} onDelete={deleteTransaction} actionsDisabled={mutationStatus === 'deleting'} />
+            ? <TransactionTable transactions={transactions} onEdit={startEditing} onDelete={setRemoving} />
             : <EmptyState icon={ArrowLeftRight} title="No transactions found" description="There are no records matching these filters." />}
           <Pagination page={page} pageCount={pageCount} total={data.total} pageSize={data.pageSize} onChange={setPage} />
         </section>
+      )}
+      {removing && (
+        <AdminActionDialog
+          danger
+          title="Delete this transaction?"
+          description="This transaction will be removed from financial reports and totals. Any monthly dues it paid will be recalculated."
+          detail={<>
+            <strong>{formatTaka(removing.amount)} · {removing.category || 'Uncategorized'}</strong>
+            <span>{formatDate(removing.date)}{(removing.memberName || removing.donorName) && ` · ${removing.memberName || removing.donorName}`}</span>
+            {removing.note && <span>{removing.note}</span>}
+          </>}
+          actionLabel="Delete transaction"
+          pendingLabel="Deleting transaction…"
+          successTitle="Transaction deleted"
+          onConfirm={removeRecord}
+          onClose={() => setRemoving(null)}
+        />
       )}
       {adding && transactionForm && (
         <div className="admin-dialog-backdrop">
@@ -191,7 +232,7 @@ export default function AdminTransactions({ transactionForm }) {
               <div><h2 id="add-transaction-title">Add transaction</h2><p className="admin-mono">New transaction entry</p></div>
               <button type="button" className="admin-icon-button" aria-label="Close add transaction dialog" onClick={() => setAdding(false)} disabled={mutationStatus === 'saving'}><X size={18} /></button>
             </div>
-            {cloneElement(transactionForm, { onSaved: () => { refetch(); setAdding(false) } })}
+            {cloneElement(transactionForm, { onSaved: () => { refetch(); setAdding(false); setSaveMessage('Transaction saved.') } })}
           </section>
         </div>
       )}
@@ -252,7 +293,7 @@ export default function AdminTransactions({ transactionForm }) {
                         </div>
                       </details>
                       <small>{editForm.dueMonths.length
-                        ? 'Requires a linked member with a configured monthly amount. The total payment will be split across the selected months.'
+                        ? 'Choose a member to assign this payment to the selected months.'
                         : 'If no month is selected, the transaction date month is used.'}</small>
                     </label>
                     {editForm.dueMonths.length > 0 && (
@@ -264,9 +305,13 @@ export default function AdminTransactions({ transactionForm }) {
                 <label>Payment method<select required disabled={metadataStatus !== 'ready'} value={editForm.paymentMethod} onChange={event => updateForm('paymentMethod', event.target.value)}>{
                   Array.from(new Set([...(metadata?.paymentMethods || []), editForm.paymentMethod].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)
                 }</select></label>
-                <label>Donor / payee name
+                <label>Member or donor / payee name
                   <div className="transaction-member-search">
-                    <input maxLength={500} value={editForm.donorName} onChange={event => { updateForm('donorName', event.target.value); setEditMemberQuery(event.target.value) }} />
+                    <input maxLength={500} value={editForm.donorName} onChange={event => {
+                      const donorName = event.target.value
+                      setEditForm(current => ({ ...current, donorName, memberId: null }))
+                      setEditMemberQuery(donorName)
+                    }} />
                     {editMemberSuggestions.length > 0 && (
                       <div id="edit-transaction-member-suggestions" className="transaction-member-suggestions" role="listbox" aria-label="Matching members">
                         {editMemberSuggestions.map(member => (
@@ -276,7 +321,7 @@ export default function AdminTransactions({ transactionForm }) {
                             role="option"
                             aria-selected={false}
                             onClick={() => {
-                              updateForm('donorName', member.fullName)
+                              setEditForm(current => ({ ...current, donorName: member.fullName, memberId: member.id }))
                               setEditMemberQuery('')
                               setEditMemberSuggestions([])
                               setEditMemberSearchStatus('idle')
@@ -290,13 +335,18 @@ export default function AdminTransactions({ transactionForm }) {
                     )}
                   </div>
                 </label>
+                {editForm.memberId && editForm.memberId !== editing.memberId && (
+                  <small className="transaction-member-search-status">This payment will be assigned to {editForm.donorName} when you save.</small>
+                )}
                 {editMemberSearchStatus === 'loading' && <small className="transaction-member-search-status" role="status">Searching members…</small>}
-                {editMemberSearchStatus === 'ready' && !editMemberSuggestions.length && editMemberQuery.trim().length >= 2 && <small className="transaction-member-search-status">No active members match. You can enter a name manually.</small>}
-                {editMemberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">Could not search members: {editMemberSearchError}</small>}
+                {isMonthlyDueCategory && !editForm.memberId && editForm.donorName.trim() && (
+                  <small className="transaction-member-search-status">Saving will use an active member with this name or create one if no match exists.</small>
+                )}
+                {editMemberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">{editMemberSearchError}</small>}
                 <label className="admin-form--transaction-note">Description<textarea rows={3} maxLength={5000} value={editForm.note} onChange={event => updateForm('note', event.target.value)} /></label>
               </div>
-              {metadataStatus === 'loading' && <div className="admin-data-status" role="status">Loading database options…</div>}
-              {metadataStatus === 'error' && <div className="admin-data-status admin-data-status--error" role="alert">Could not load database options: {metadataError}</div>}
+              {metadataStatus === 'loading' && <div className="admin-data-status" role="status">Loading form choices…</div>}
+              {metadataStatus === 'error' && <div className="admin-data-status admin-data-status--error" role="alert">We couldn’t load the choices for this form. {metadataError}</div>}
               {mutationError && <div className="admin-data-status admin-data-status--error" role="alert">{mutationError}</div>}
               <div className="admin-dialog-actions">
                 <button type="button" className="admin-button admin-button--quiet" onClick={() => { setEditing(null); setMutationError('') }} disabled={mutationStatus === 'saving'}>Cancel</button>

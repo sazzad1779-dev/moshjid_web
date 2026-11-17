@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { dedupeRequest } from '../utils/inFlightRequests.js'
-import { getRequestErrorMessage } from '../utils/requestErrors.js'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 
 function fetchCollectors() {
   return dedupeRequest('/api/collectors', async () => {
@@ -8,9 +8,7 @@ function fetchCollectors() {
       credentials: 'include',
       signal: AbortSignal.timeout(12000),
     })
-    const json = await res.json()
-    if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`)
-    return json
+    return readJsonResponse(res, 'Try again in a moment. If the problem continues, contact the site administrator.')
   })
 }
 

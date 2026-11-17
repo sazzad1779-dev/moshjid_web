@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { dedupeRequest } from '../utils/inFlightRequests.js'
-import { getRequestErrorMessage } from '../utils/requestErrors.js'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 
 const REQUEST_TIMEOUT_MS = 12000
 
@@ -11,9 +11,7 @@ function fetchAdminResource(search) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       cache: 'no-store',
     })
-    const data = await response.json()
-    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`)
-    return data
+    return readJsonResponse(response, 'Try again in a moment. If the problem continues, contact the site administrator.')
   })
 }
 

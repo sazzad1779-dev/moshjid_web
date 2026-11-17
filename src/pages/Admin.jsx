@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { ArrowDownLeft, Calculator, List, LockKeyhole, LogOut, X } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 import ChartShell from '../components/ChartShell.jsx'
 import PageHeading from '../components/PageHeading.jsx'
 import Kpi from '../components/Kpi.jsx'
@@ -54,14 +55,13 @@ function TransactionForm({ enteredBy, onSaved }) {
           cache: 'no-store',
           signal: controller.signal,
         })
-        const result = await response.json()
-        if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+        const result = await readJsonResponse(response, 'We couldn’t search for members. Try typing the name again.')
         setMemberSuggestions(result.rows || [])
         setMemberSearchStatus('ready')
       } catch (error) {
         if (error.name !== 'AbortError') {
           setMemberSuggestions([])
-          setMemberSearchError(error.message || 'Failed to search members.')
+          setMemberSearchError(getRequestErrorMessage(error))
           setMemberSearchStatus('error')
         }
       }
@@ -106,13 +106,13 @@ function TransactionForm({ enteredBy, onSaved }) {
   const areas = metadata?.areas || []
   const selectedMemberStatus = userStatuses.includes(memberDetailForm.status) ? memberDetailForm.status : userStatuses[0] || ''
   const metadataMessage = metadataStatus === 'loading'
-    ? 'Loading database options…'
+    ? 'Loading form choices…'
     : metadataStatus === 'error'
-      ? `Could not load database options: ${metadataError}`
+      ? `We couldn’t load the choices for this form. ${metadataError}`
       : !transactionTypes.length
-        ? 'No active transaction categories are configured.'
+        ? 'No transaction categories are available. Ask the site administrator to add a category.'
         : !paymentMethods.length
-          ? 'No payment methods are configured.'
+          ? 'No payment methods are available. Ask the site administrator to add one.'
           : ''
   const canSubmit = metadataStatus === 'ready' && !metadataMessage && categories.length > 0
 
@@ -132,8 +132,7 @@ function TransactionForm({ enteredBy, onSaved }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, type: selectedType, paymentMethod: selectedPaymentMethod, enteredBy })
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to save')
+      const data = await readJsonResponse(res, 'We couldn’t save the transaction. Try again. If the problem continues, contact the site administrator.')
       setStatus('success')
       setForm(empty)
       setMemberQuery('')
@@ -151,7 +150,7 @@ function TransactionForm({ enteredBy, onSaved }) {
         setTimeout(() => setStatus(null), 3000)
       }
     } catch (err) {
-      setErrMsg(err.message)
+      setErrMsg(getRequestErrorMessage(err))
       setStatus('error')
     }
   }
@@ -180,14 +179,13 @@ function TransactionForm({ enteredBy, onSaved }) {
           }),
         }),
       })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
+      await readJsonResponse(response, 'We couldn’t save the member details. Try again, or close this popup and update the profile from Members.')
       setNewMemberPrompt(null)
       setMemberDetailStatus('idle')
       onSaved?.()
       setTimeout(() => setStatus(null), 3000)
     } catch (saveError) {
-      setMemberDetailError(saveError.message || 'Failed to save member details.')
+      setMemberDetailError(`The transaction is saved. ${getRequestErrorMessage(saveError)}`)
       setMemberDetailStatus('idle')
     }
   }
@@ -285,7 +283,7 @@ function TransactionForm({ enteredBy, onSaved }) {
           </div>
           {memberSearchStatus === 'loading' && <small className="transaction-member-search-status" role="status">Searching members…</small>}
           {memberSearchStatus === 'ready' && !memberSuggestions.length && memberQuery.trim().length >= 2 && <small className="transaction-member-search-status">No active members match. You can enter a name manually.</small>}
-          {memberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">Could not search members: {memberSearchError}</small>}
+          {memberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">{memberSearchError}</small>}
           {form.memberId && <small className="transaction-member-search-status">Selected member will be linked to this transaction.</small>}
         </div>
 
@@ -375,14 +373,10 @@ function TransactionForm({ enteredBy, onSaved }) {
 
         {metadataMessage && <div role="status" style={{ color: metadataStatus === 'error' ? 'var(--c-expense)' : 'var(--c-muted)', fontSize: 13 }}>{metadataMessage}</div>}
         {status === 'success' && !newMemberPrompt && (
-          <div style={{ padding: '12px 14px', background: 'var(--tint-income)', borderRadius: 10, color: 'var(--c-income)', fontWeight: 600, fontSize: 13 }}>
-            ✅ Transaction saved successfully!
-          </div>
+          <div className="admin-data-status admin-data-status--success" role="status">Transaction saved.</div>
         )}
         {status === 'error' && (
-          <div style={{ padding: '12px 14px', background: 'var(--tint-expense)', borderRadius: 10, color: 'var(--c-expense)', fontWeight: 600, fontSize: 13 }}>
-            ❌ {errMsg}
-          </div>
+          <div className="admin-data-status admin-data-status--error" role="alert">{errMsg}</div>
         )}
       </form>
 
@@ -397,7 +391,7 @@ function TransactionForm({ enteredBy, onSaved }) {
               <button type="button" className="admin-icon-button" aria-label="Close" onClick={skipMemberDetails} disabled={memberDetailStatus === 'saving'}><X size={18} /></button>
             </div>
             <p style={{ color: 'var(--c-muted)', fontSize: 13, marginBottom: 12 }}>
-              This name was not in the member list, so a member profile was created. Add more details now (optional).
+              Your transaction is saved and linked to this new profile. You can add member details now or skip this step.
             </p>
             <form onSubmit={saveMemberDetails} style={{ display: 'grid', gap: 12 }}>
               <div className="form-grid-2">
@@ -441,7 +435,7 @@ function TransactionForm({ enteredBy, onSaved }) {
                 <textarea rows={2} maxLength={1000} value={memberDetailForm.address} onChange={e => setMemberDetailForm(f => ({ ...f, address: e.target.value }))}
                   style={{ padding: '11px 14px', borderRadius: 10, border: '1px solid var(--c-border-strong)', fontSize: 14, width: '100%', boxSizing: 'border-box', outline: 'none', resize: 'vertical', background: 'var(--c-surface)', color: 'var(--c-ink)' }} />
               </div>
-              {memberDetailError && <div style={{ color: 'var(--c-expense)', fontSize: 13 }}>{memberDetailError}</div>}
+              {memberDetailError && <div className="admin-data-status admin-data-status--error" role="alert">{memberDetailError}</div>}
               <div className="admin-dialog-actions">
                 <button type="button" className="admin-button admin-button--quiet" onClick={skipMemberDetails} disabled={memberDetailStatus === 'saving'}>Skip</button>
                 <button type="submit" className="admin-button admin-button--primary" disabled={memberDetailStatus === 'saving' || metadataStatus !== 'ready'}>{memberDetailStatus === 'saving' ? 'Saving…' : 'Save details'}</button>
@@ -502,7 +496,7 @@ function CollectorDashboard({ data, status, error, onRetry, onLogout }) {
   if (status === 'error') {
     return (
       <div role="alert" style={{ display: 'grid', justifyItems: 'center', gap: 12, color: 'var(--c-expense)', textAlign: 'center', padding: 40 }}>
-        <span>Could not load collection data: {error}</span>
+        <span>We couldn’t load your collections. {error}</span>
         <button type="button" className="admin-button admin-button--quiet" onClick={onRetry}>Try again</button>
       </div>
     )
@@ -544,6 +538,17 @@ export default function Admin() {
   const { loading, authenticated, role, error: authError, login, logout } = useAuth()
   const { data, status: collectorStatus, error: collectorError, refetch: refetchCollectorData } = useCollectorData({ enabled: authenticated && role === 'collector' })
   const [loginError, setLoginError] = useState('')
+  const [logoutError, setLogoutError] = useState('')
+  const signOut = async () => {
+    setLogoutError('')
+    try {
+      await logout()
+      setLoginError('')
+    } catch (error) {
+      setLogoutError(getRequestErrorMessage(error))
+    }
+  }
+  const logoutNotice = logoutError && <div className="admin-data-status admin-data-status--error" role="alert">{logoutError}</div>
   const location = useLocation()
 
   if (loading) {
@@ -566,17 +571,25 @@ export default function Admin() {
 
   if (role === 'collector') {
     return (
-      <CollectorDashboard
-        data={data}
-        status={collectorStatus}
-        error={collectorError}
-        onRetry={refetchCollectorData}
-        onLogout={logout}
-      />
+      <>
+        {logoutNotice}
+        <CollectorDashboard
+          data={data}
+          status={collectorStatus}
+          error={collectorError}
+          onRetry={refetchCollectorData}
+          onLogout={signOut}
+        />
+      </>
     )
   }
   if (location.pathname === '/admin' || location.pathname === '/admin/') {
     return <Navigate to="/admin/overview" replace />
   }
-  return <AdminWorkspace onLogout={logout} transactionForm={<TransactionForm enteredBy="Admin" />} />
+  return (
+    <>
+      {logoutNotice}
+      <AdminWorkspace onLogout={signOut} transactionForm={<TransactionForm enteredBy="Admin" />} />
+    </>
+  )
 }

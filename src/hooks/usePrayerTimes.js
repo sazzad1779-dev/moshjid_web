@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getRequestErrorMessage } from '../utils/requestErrors.js'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 
 export async function requestPrayerTimes({ signal, times } = {}) {
   const response = await fetch('/api/prayer-times', {
@@ -11,8 +11,9 @@ export async function requestPrayerTimes({ signal, times } = {}) {
       body: JSON.stringify({ times }),
     }),
   })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.error || 'Could not load prayer times.')
+  const data = await readJsonResponse(response, times
+    ? 'We couldn’t publish the prayer times. Try again. If the problem continues, contact the site administrator.'
+    : 'We couldn’t load the prayer times. Try again in a moment.')
   return data.times
 }
 

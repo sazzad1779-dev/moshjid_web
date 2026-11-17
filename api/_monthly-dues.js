@@ -147,7 +147,7 @@ export async function syncMonthlyDueForTransaction(client, transactionId, reques
   }
 
   const newDueIds = []
-  if (canTrackPayment && (allocatePayment || recurringAmount !== null)) {
+  if (canTrackPayment) {
     for (const period of periods) {
       newDueIds.push(await findOrCreateMonthlyDue(
         client,

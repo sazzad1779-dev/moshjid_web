@@ -1,7 +1,10 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { CalendarDays, CircleDollarSign, RefreshCw, Search, Users, Wallet } from 'lucide-react'
 import useAdminResource from '../../hooks/useAdminResource.js'
 import { formatTaka } from '../../utils/formatters.js'
+import AdminActionDialog from './AdminActionDialog.jsx'
+import { readJsonResponse } from '../../utils/requestErrors.js'
 import { EmptyState, PageTitle, Pagination, StatCard } from './AdminShared.jsx'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
@@ -12,9 +15,7 @@ export default function AdminDonations() {
   const [search, setSearch] = useState('')
   const { data, status, error, refetch } = useAdminResource('dues-matrix', { year, page, pageSize: 25, search })
   const [selectedMember, setSelectedMember] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshError, setRefreshError] = useState('')
-  const [refreshMessage, setRefreshMessage] = useState('')
+  const [refreshOpen, setRefreshOpen] = useState(false)
 
   const members = data?.members || []
   const monthNames = data?.monthNames || MONTH_NAMES
@@ -32,34 +33,19 @@ export default function AdminDonations() {
   }
 
   const refreshFromTransactions = async () => {
-    setRefreshing(true)
-    setRefreshError('')
-    setRefreshMessage('')
-    try {
-      const response = await fetch('/api/admin-data?resource=dues-refresh', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(60000),
-      })
-      let result
-      try {
-        result = await response.json()
-      } catch {
-        throw new Error(`Refresh failed with an invalid server response (HTTP ${response.status}).`)
-      }
-      if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
-      setRefreshMessage(
-        `Inserted ${result.insertedDues} missing monthly dues and linked ${result.linkedTransactions} transactions. `
-        + `${result.skippedMonthsWithoutMonthlyAmount} member-months skipped because no monthly amount is configured.`
-      )
-      setSelectedMember(null)
-      refetch()
-    } catch (error) {
-      setRefreshError(error.message || 'Failed to refresh monthly dues from transactions.')
-    } finally {
-      setRefreshing(false)
-    }
+    const response = await fetch('/api/admin-data?resource=dues-refresh', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(60000),
+    })
+    const result = await readJsonResponse(response, 'We couldn’t refresh monthly dues. Try again. If the problem continues, contact the site administrator.')
+    setSelectedMember(null)
+    refetch()
+    const { insertedDues, linkedTransactions } = result
+    return insertedDues || linkedTransactions
+      ? `Monthly records added: ${insertedDues}. Payments linked: ${linkedTransactions}.`
+      : 'There were no new monthly records or payments to link.'
   }
 
   const dueMonths = selectedMember
@@ -74,11 +60,19 @@ export default function AdminDonations() {
   return (
     <>
       <PageTitle title="Monthly dues" description="A complete member-by-member view of dues and payments." />
-      {refreshing && <div className="admin-data-status" role="status">Checking confirmed Imam Hadya transactions and refreshing monthly dues…</div>}
-      {refreshError && <div className="admin-data-status admin-data-status--error" role="alert">{refreshError}</div>}
-      {refreshMessage && <div className="admin-data-status" role="status">{refreshMessage}</div>}
+      {refreshOpen && (
+        <AdminActionDialog
+          title="Refresh monthly dues?"
+          description="Check recorded Imam Hadiya payments and link any missing entries to their transaction month."
+          actionLabel="Refresh dues"
+          pendingLabel="Refreshing dues…"
+          successTitle="Monthly dues refresh complete"
+          onConfirm={refreshFromTransactions}
+          onClose={() => setRefreshOpen(false)}
+        />
+      )}
       {status === 'loading' && <div className="admin-data-status" role="status">Loading monthly dues…</div>}
-      {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>Could not load monthly dues: {error || 'Unknown error'}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
+      {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>We couldn’t load monthly dues. {error}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
       {status === 'ready' && (
         <>
           <div className="admin-stat-grid">
@@ -92,9 +86,8 @@ export default function AdminDonations() {
               <div><h2>Monthly dues sheet</h2><p>Showing {members.length ? (page - 1) * data.pageSize + 1 : 0}–{Math.min(page * data.pageSize, data.total)} of {data.total} members · select a member for a full breakdown</p></div>
               <div className="admin-donation-filters">
                 <label className="admin-select-label">Year<select value={year} onChange={changeYear}>{Array.from({ length: 7 }, (_, index) => String(new Date().getFullYear() - index)).map(option => <option key={option}>{option}</option>)}</select></label>
-                <button type="button" className="admin-button admin-button--quiet" onClick={refreshFromTransactions} disabled={refreshing}>
-                  <RefreshCw size={15} className={refreshing ? 'admin-spin' : ''} />
-                  {refreshing ? 'Refreshing…' : 'Refresh from transactions'}
+                <button type="button" className="admin-button admin-button--quiet" onClick={() => setRefreshOpen(true)}>
+                  <RefreshCw size={15} aria-hidden="true" />Refresh from transactions
                 </button>
               </div>
             </div>
@@ -127,6 +120,7 @@ export default function AdminDonations() {
                     <div><span>Balance</span><strong className="is-balance">{formatTaka(selectedMember.balance)}</strong></div>
                   </div>
                   <div className="admin-dues-detail-heading"><strong>Monthly breakdown</strong><span>{dueMonths.length ? `${dueMonths.length} month${dueMonths.length === 1 ? '' : 's'} outstanding` : 'No outstanding months'}</span></div>
+                  {selectedMember.totalPaid > 0 && <p className="admin-help-text">Select a paid amount to see its transactions.</p>}
                   {memberMonths.length ? (
                     <div className="admin-table-scroll">
                       <table className="admin-table admin-dues-detail-table">
@@ -136,13 +130,23 @@ export default function AdminDonations() {
                             <td>{monthNames[month.month - 1]}</td>
                             <td><span className={`admin-status admin-status--${month.status}`}>{month.status}</span>{month.status === 'waived' && month.waivedReason && <small className="admin-mono admin-waived-reason">{month.waivedReason}</small>}</td>
                             <td className="admin-align-right">{month.status === 'unpaid' ? '—' : formatTaka(month.amountDue)}</td>
-                            <td className="admin-align-right admin-paid-amount">{month.status === 'unpaid' ? '—' : formatTaka(month.amountPaid)}</td>
+                            <td className="admin-align-right admin-paid-amount">
+                              {month.amountPaid > 0 ? (
+                                <Link
+                                  className="text-link"
+                                  aria-label={`View payments for ${selectedMember.memberName}, ${monthNames[month.month - 1]} ${year}`}
+                                  to={`/admin/transactions?member=${encodeURIComponent(selectedMember.memberId)}&dueMonth=${year}-${String(month.month).padStart(2, '0')}`}
+                                >
+                                  {formatTaka(month.amountPaid)}
+                                </Link>
+                              ) : '—'}
+                            </td>
                             <td className="admin-align-right">{month.status === 'waived' || month.status === 'paid' ? formatTaka(0) : month.status === 'unpaid' ? '—' : formatTaka(Math.max(0, month.amountDue - month.amountPaid))}</td>
                           </tr>
                         ))}</tbody>
                       </table>
                     </div>
-                  ) : <EmptyState icon={CalendarDays} title="No dues started this year" description="A confirmed Imam Hadya transaction and a monthly amount are needed to start dues." />}
+                  ) : <EmptyState icon={CalendarDays} title="No dues started this year" description="Confirmed Imam Hadya payments will appear here once recorded." />}
                 </section>
               </div>
             )}

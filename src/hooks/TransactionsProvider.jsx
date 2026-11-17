@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
 import { computeSummary } from '../utils/computations.js'
 import { dedupeRequest } from '../utils/inFlightRequests.js'
-import { getRequestErrorMessage } from '../utils/requestErrors.js'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 
 // Module-level cache shared across all provider instances (and remounts).
 let cache = {
@@ -13,11 +13,8 @@ let cache = {
 
 function fetchTransactions() {
   return dedupeRequest('/api/transactions', async () => {
-    const res = await fetch('/api/transactions', { signal: AbortSignal.timeout(12000) })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-    if (data.error) throw new Error(data.error)
-    return data
+    const res = await fetch('/api/transactions', { cache: 'no-cache', signal: AbortSignal.timeout(12000) })
+    return readJsonResponse(res, 'Try again in a moment. If the problem continues, contact the site administrator.')
   })
 }
 
@@ -59,7 +56,7 @@ export function TransactionsProvider({ children, enabled = true }) {
 
   useEffect(() => {
     mountedRef.current = true
-    if (enabled && !cache.rows) fetchData()
+    if (enabled) fetchData()
     return () => { mountedRef.current = false }
   }, [enabled, fetchData])
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { dedupeRequest } from '../utils/inFlightRequests.js'
-import { getRequestErrorMessage } from '../utils/requestErrors.js'
+import { getRequestErrorMessage, readJsonResponse } from '../utils/requestErrors.js'
 
 function fetchMetadata() {
   return dedupeRequest('/api/options', async () => {
@@ -9,9 +9,7 @@ function fetchMetadata() {
       cache: 'no-store',
       signal: AbortSignal.timeout(12000),
     })
-    const payload = await response.json()
-    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`)
-    return payload
+    return readJsonResponse(response, 'Refresh the page to try again. If the problem continues, contact the site administrator.')
   })
 }
 
