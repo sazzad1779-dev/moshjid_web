@@ -1,3 +1,4 @@
+import { ArrowDownLeft, ArrowUpRight, List, Tags, Wallet } from 'lucide-react'
 import React, { useMemo } from 'react'
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -75,11 +76,11 @@ export default function Dashboard({ rows, summary }) {
 
       {/* ── KPI Row ── */}
       <div className="kpi-row">
-        <Kpi label="Total Income" value={formatTaka(totalIncome)} color={COLORS.income} icon="💰" />
-        <Kpi label="Total Expense" value={formatTaka(totalExpense)} color={COLORS.expense} icon="💸" />
-        <Kpi label="Available Balance" value={formatTaka(balance)} color={balance >= 0 ? COLORS.balance : COLORS.expense} icon="🏦" />
-        <Kpi label="Active Categories" value={allCats.length} color={COLORS.accent} icon="🏷️" />
-        <Kpi label="Transactions" value={rows.length} color="var(--c-ink-2)" icon="📑" />
+        <Kpi label="Total Income" value={formatTaka(totalIncome)} color={COLORS.income} icon={<ArrowDownLeft size={20} aria-hidden="true" />} />
+        <Kpi label="Total Expense" value={formatTaka(totalExpense)} color={COLORS.expense} icon={<ArrowUpRight size={20} aria-hidden="true" />} />
+        <Kpi label="Available Balance" value={formatTaka(balance)} color={balance >= 0 ? COLORS.balance : COLORS.expense} icon={<Wallet size={20} aria-hidden="true" />} />
+        <Kpi label="Active Categories" value={allCats.length} color={COLORS.accent} icon={<Tags size={20} aria-hidden="true" />} />
+        <Kpi label="Transactions" value={rows.length} color="var(--c-ink-2)" icon={<List size={20} aria-hidden="true" />} />
       </div>
 
       {/* ── Row 2: Trend + Radar ── */}

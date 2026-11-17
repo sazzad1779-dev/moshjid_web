@@ -9,13 +9,13 @@ async function findOrCreateMonthlyDue(client, memberId, date, monthlyAmount) {
      VALUES (
        $1::uuid,
        date_trunc('month', $2::date)::date,
-       $3::numeric,
+       COALESCE($3::numeric, 0),
        0,
        'unpaid'::due_status,
        (date_trunc('month', $2::date) + INTERVAL '1 month - 1 day')::date
      )
      ON CONFLICT (member_id, period)
-     DO UPDATE SET amount_due = EXCLUDED.amount_due, updated_at = NOW()
+     DO UPDATE SET amount_due = COALESCE($3::numeric, monthly_dues.amount_due), updated_at = NOW()
      RETURNING id::text AS id`,
     [memberId, date, monthlyAmount]
   )
@@ -123,16 +123,17 @@ export async function syncMonthlyDueForTransaction(client, transactionId, reques
     [String(transactionId)]
   )
   const oldDueIds = [oldDueId, ...existingPayments.rows.map(row => row.due_id)]
-  const shouldTrackDue = Boolean(
+  const canTrackPayment = Boolean(
     transaction.member_id
       && transaction.status === 'confirmed'
       && !transaction.is_deleted
-      && Number(transaction.monthly_amount) > 0
       && isImamHadyaIncome(transaction)
   )
 
   const hasRequestedPeriods = Array.isArray(requestedPeriods)
   const hasExplicitPeriods = hasRequestedPeriods && requestedPeriods.length > 0
+  const allocatePayment = hasExplicitPeriods || (!hasRequestedPeriods && existingPayments.rows.length > 0)
+  const recurringAmount = Number(transaction.monthly_amount) > 0 ? transaction.monthly_amount : null
   const periods = hasExplicitPeriods
     ? [...new Set(requestedPeriods)].sort()
     : hasRequestedPeriods
@@ -141,24 +142,24 @@ export async function syncMonthlyDueForTransaction(client, transactionId, reques
         ? [...new Set(existingPayments.rows.map(row => row.period))].sort()
         : [transaction.date]
 
-  if (hasExplicitPeriods && !shouldTrackDue) {
-    throw new Error('Invalid month selection: monthly dues require a linked member with a configured monthly amount')
+  if (hasExplicitPeriods && !canTrackPayment) {
+    throw new Error('Invalid month selection: select a member for a confirmed Imam Hadya income payment')
   }
 
   const newDueIds = []
-  if (shouldTrackDue) {
+  if (canTrackPayment && (allocatePayment || recurringAmount !== null)) {
     for (const period of periods) {
       newDueIds.push(await findOrCreateMonthlyDue(
         client,
         transaction.member_id,
         period,
-        transaction.monthly_amount
+        recurringAmount
       ))
     }
 
     await client.query('DELETE FROM monthly_due_payments WHERE transaction_id = $1', [String(transactionId)])
 
-    if (hasExplicitPeriods || (!hasRequestedPeriods && existingPayments.rows.length)) {
+    if (allocatePayment) {
       const allocationResult = await client.query(
         `WITH periods AS (
            SELECT due_id, ordinal, count(*) OVER () AS period_count
@@ -167,15 +168,18 @@ export async function syncMonthlyDueForTransaction(client, transactionId, reques
          INSERT INTO monthly_due_payments (transaction_id, monthly_due_id, amount_paid)
          SELECT $1,
                 periods.due_id,
-                CASE
-                  WHEN periods.ordinal = periods.period_count
-                    THEN $2::numeric - ROUND($2::numeric / periods.period_count, 2) * (periods.period_count - 1)
-                  ELSE ROUND($2::numeric / periods.period_count, 2)
+                CASE WHEN $4::numeric IS NULL
+                  THEN ROUND($2::numeric * periods.ordinal / periods.period_count, 2)
+                    - ROUND($2::numeric * (periods.ordinal - 1) / periods.period_count, 2)
+                  ELSE GREATEST($2::numeric - $4::numeric * (periods.ordinal - 1), 0)
+                    - CASE WHEN periods.ordinal = periods.period_count THEN 0
+                        ELSE GREATEST($2::numeric - $4::numeric * periods.ordinal, 0)
+                      END
                 END
            FROM periods
          ON CONFLICT (transaction_id, monthly_due_id)
          DO UPDATE SET amount_paid = EXCLUDED.amount_paid`,
-        [String(transactionId), transaction.amount, newDueIds]
+        [String(transactionId), transaction.amount, newDueIds, recurringAmount]
       )
       if (allocationResult.rowCount !== periods.length) {
         throw new Error('Failed to allocate transaction amount across selected months')

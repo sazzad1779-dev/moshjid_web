@@ -33,7 +33,7 @@ export default function AdminOverview({ onNavigate }) {
 
   return (
     <>
-      <PageTitle eyebrow="Administration" title="Overview" description="A clear picture of mosque operations and recent activity." />
+      <PageTitle title="Overview" description="A clear picture of mosque operations and recent activity." />
       {status === 'loading' && <div className="admin-data-status" role="status">Loading overview data…</div>}
       {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>Could not load overview data: {error || 'Unknown error'}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
       {status === 'ready' && (

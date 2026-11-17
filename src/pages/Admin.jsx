@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { ArrowDownLeft, Calculator, List, LockKeyhole, LogOut, X } from 'lucide-react'
 import { Navigate, useLocation } from 'react-router-dom'
 import ChartShell from '../components/ChartShell.jsx'
+import PageHeading from '../components/PageHeading.jsx'
+import Kpi from '../components/Kpi.jsx'
+import TableShell from '../components/TableShell.jsx'
 import { useAuth } from '../hooks/useAuth.js'
 import { useCollectorData } from '../hooks/useCollectorData.js'
 import useMetadata from '../hooks/useMetadata.js'
@@ -96,6 +99,7 @@ function TransactionForm({ enteredBy, onSaved }) {
       : (transactionTypes[0] || '')
   const categories = categoryRows.filter(item => item.type === selectedType).map(item => item.name)
   const isMonthlyDueCategory = selectedType === 'income' && /^imam hadi?ya$/i.test(form.category.trim())
+  const hasSelectedMonths = isMonthlyDueCategory && form.dueMonths.length > 0
   const paymentMethods = metadata?.paymentMethods || []
   const selectedPaymentMethod = paymentMethods.includes(form.paymentMethod) ? form.paymentMethod : paymentMethods[0] || ''
   const userStatuses = metadata?.userStatuses || []
@@ -114,7 +118,12 @@ function TransactionForm({ enteredBy, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!canSubmit) return
+    if (!canSubmit || status === 'loading') return
+    if (hasSelectedMonths && !form.memberId && !form.donorName.trim()) {
+      setErrMsg('Select an existing member or enter a new member name for the selected months.')
+      setStatus('error')
+      return
+    }
     setStatus('loading')
     setErrMsg('')
     try {
@@ -131,7 +140,11 @@ function TransactionForm({ enteredBy, onSaved }) {
       setMemberSuggestions([])
       setDescriptionTouched(false)
       if (data?.newMember && data?.memberId) {
-        setNewMemberPrompt({ id: data.memberId, name: (form.donorName || '').trim() })
+        setNewMemberPrompt({
+          id: data.memberId,
+          name: (form.donorName || '').trim(),
+          paymentTransactionId: form.dueMonths.length > 1 ? String(data.id) : undefined,
+        })
         setMemberDetailForm({ phone: '', email: '', address: '', areaId: '', monthlyAmount: '', status: userStatuses[0] || 'active' })
       } else {
         onSaved?.()
@@ -161,7 +174,10 @@ function TransactionForm({ enteredBy, onSaved }) {
           address: memberDetailForm.address,
           areaId: memberDetailForm.areaId,
           status: selectedMemberStatus,
-          monthlyAmount: memberDetailForm.monthlyAmount,
+          ...(memberDetailForm.monthlyAmount !== '' && {
+            monthlyAmount: memberDetailForm.monthlyAmount,
+            paymentTransactionId: newMemberPrompt.paymentTransactionId,
+          }),
         }),
       })
       const result = await response.json()
@@ -222,9 +238,13 @@ function TransactionForm({ enteredBy, onSaved }) {
         </div>
 
         <div>
-          <label style={lbl}>{selectedType === 'income' ? 'Member / Donor Name (optional)' : 'Member / Payee Name (optional)'}</label>
+          <label htmlFor="transaction-member-name" style={lbl}>
+            {hasSelectedMonths ? 'Member name *' : selectedType === 'income' ? 'Member / Donor Name (optional)' : 'Member / Payee Name (optional)'}
+          </label>
           <div className="transaction-member-search">
             <input
+              id="transaction-member-name"
+              required={hasSelectedMonths}
               type="text"
               autoComplete="off"
               role="combobox"
@@ -236,7 +256,7 @@ function TransactionForm({ enteredBy, onSaved }) {
               onChange={e => {
                 set('donorName', e.target.value)
                 set('memberId', '')
-                setMemberQuery(e.target.value)
+                          setMemberQuery(e.target.value)
               }}
               {...inp()}
             />
@@ -251,7 +271,7 @@ function TransactionForm({ enteredBy, onSaved }) {
                     onClick={() => {
                       set('donorName', member.fullName)
                       set('memberId', member.id)
-                      setMemberQuery('')
+                                      setMemberQuery('')
                       setMemberSuggestions([])
                       setMemberSearchStatus('idle')
                     }}
@@ -302,7 +322,7 @@ function TransactionForm({ enteredBy, onSaved }) {
               </details>
               <small style={{ display: 'block', marginTop: 6, color: 'var(--c-muted)', fontSize: 12 }}>
                 {form.dueMonths.length
-                  ? 'Requires a linked member with a configured monthly amount. The total payment will be split across the selected months.'
+                  ? 'The payment is applied to the selected months in order. Without a monthly amount, it is split evenly.'
                   : 'If no month is selected, the transaction date month is used.'}
               </small>
             </div>
@@ -326,7 +346,7 @@ function TransactionForm({ enteredBy, onSaved }) {
         <div className="form-grid-2">
           <div>
             <label style={lbl}>Amount (Taka) / পরিমাণ *</label>
-            <input type="number" required min="1" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} {...inp()} />
+            <input type="number" required min="0.01" step="0.01" placeholder="0" value={form.amount} onChange={e => set('amount', e.target.value)} {...inp()} />
           </div>
           <div>
             <label style={lbl}>Payment Method *</label>
@@ -390,18 +410,31 @@ function TransactionForm({ enteredBy, onSaved }) {
                   <input type="email" maxLength={254} value={memberDetailForm.email} onChange={e => setMemberDetailForm(f => ({ ...f, email: e.target.value }))} {...inp()} />
                 </div>
               </div>
-              <div className="form-grid-2">
-                <div>
-                  <label style={lbl}>Area</label>
-                  <select disabled={metadataStatus !== 'ready'} value={memberDetailForm.areaId} onChange={e => setMemberDetailForm(f => ({ ...f, areaId: e.target.value }))} {...inp()}>
-                    <option value="">— Select area —</option>
-                    {areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={lbl}>Monthly amount</label>
-                  <input type="number" min="0" step="0.01" value={memberDetailForm.monthlyAmount} onChange={e => setMemberDetailForm(f => ({ ...f, monthlyAmount: e.target.value }))} {...inp()} />
-                </div>
+              <div>
+                <label style={lbl}>Area</label>
+                <select disabled={metadataStatus !== 'ready'} value={memberDetailForm.areaId} onChange={e => setMemberDetailForm(f => ({ ...f, areaId: e.target.value }))} {...inp()}>
+                  <option value="">— Select area —</option>
+                  {areas.map(area => <option key={area.id} value={area.id}>{area.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="new-member-monthly-amount" style={lbl}>Monthly amount (Taka, optional)</label>
+                <input
+                  id="new-member-monthly-amount"
+                  type="number"
+                  min="0"
+                  max="9999999999.99"
+                  step="0.01"
+                  value={memberDetailForm.monthlyAmount}
+                  onChange={event => setMemberDetailForm(current => ({ ...current, monthlyAmount: event.target.value }))}
+                  aria-describedby={newMemberPrompt.paymentTransactionId ? 'new-member-monthly-amount-help' : undefined}
+                  {...inp()}
+                />
+                {newMemberPrompt.paymentTransactionId && (
+                  <small id="new-member-monthly-amount-help" className="transaction-member-search-status">
+                    Enter an amount to apply the payment to the selected months in order. Leave it blank to keep the even split.
+                  </small>
+                )}
               </div>
               <div>
                 <label style={lbl}>Address</label>
@@ -435,57 +468,29 @@ function LoginScreen({ onLogin, error }) {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <ChartShell title="Admin Access" subtitle="Restricted area — PIN required">
-        <div style={{ maxWidth: 420, margin: '0 auto', padding: '20px 10px' }}>
-          <div style={{ textAlign: 'center', marginBottom: 24 }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--c-ink)' }}>Mosque Admin Panel</div>
-            <div style={{ fontSize: 13, color: 'var(--c-muted-2)', marginTop: 6 }}>Enter your PIN to continue</div>
-          </div>
-
-          <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 14 }}>
-            <input
-              type="password"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              maxLength={8}
-              value={pin}
-              onChange={e => setPin(e.target.value)}
-              placeholder="Enter PIN"
-              required
-              style={{
-                padding: '14px 16px', borderRadius: 12, border: '1px solid var(--c-border-strong)',
-                fontSize: 18, textAlign: 'center', letterSpacing: '0.3em',
-                outline: 'none', fontWeight: 700, background: 'var(--c-surface)', color: 'var(--c-ink)'
-              }}
-              onFocus={e => e.target.style.borderColor = 'var(--c-primary)'}
-              onBlur={e => e.target.style.borderColor = 'var(--c-border-strong)'}
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                border: 'none', borderRadius: 12, padding: '14px 16px',
-                background: loading ? 'var(--c-muted-2)' : 'var(--c-primary-button)', color: 'var(--c-on-primary)',
-                fontWeight: 700, cursor: loading ? 'wait' : 'pointer', fontSize: 15
-              }}
-            >
-              {loading ? 'Verifying…' : 'Continue to Admin Panel'}
-            </button>
-          </form>
-
-          {error && (
-            <div style={{
-              marginTop: 14, padding: '12px 14px', background: 'var(--tint-expense)',
-              borderRadius: 10, color: 'var(--c-expense)', fontWeight: 600, fontSize: 13, textAlign: 'center'
-            }}>
-              {error}
-            </div>
-          )}
-        </div>
-      </ChartShell>
-    </div>
+    <section className="admin-signin">
+      <div className="admin-signin__icon"><LockKeyhole size={23} aria-hidden="true" /></div>
+      <PageHeading title="Admin sign in" description="Enter your PIN to access the mosque workspace." />
+      <form className="admin-form" onSubmit={handleSubmit}>
+        <label>
+          Access PIN
+          <input
+            type="password"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="current-password"
+            maxLength={8}
+            value={pin}
+            onChange={event => setPin(event.target.value)}
+            required
+          />
+        </label>
+        {error && <div className="admin-data-status admin-data-status--error" role="alert">{error}</div>}
+        <button type="submit" className="admin-button admin-button--primary" disabled={loading}>
+          {loading ? 'Verifying…' : 'Sign in'}
+        </button>
+      </form>
+    </section>
   )
 }
 
@@ -508,58 +513,27 @@ function CollectorDashboard({ data, status, error, onRetry, onLogout }) {
   const myData = data.collectors.find(c => c.name === myName) || data.collectors[0]
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
-      <ChartShell title={`Collector: ${myName}`} subtitle="Your collection summary">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-          <div style={{ color: 'var(--c-muted)', fontSize: 14 }}>View your collection summary and recent entries.</div>
-          <button onClick={onLogout} style={{
-            border: '1px solid var(--c-border-strong)', borderRadius: 10, padding: '10px 16px',
-            background: 'var(--c-surface)', cursor: 'pointer', fontWeight: 700, color: 'var(--c-expense)', fontSize: 13
-          }}>
-            Sign Out
-          </button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
-            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Total Income</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.income, marginTop: 8 }}>{formatTaka(myData.income)}</div>
-          </div>
-          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
-            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transactions</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--c-ink)', marginTop: 8 }}>{myData.count}</div>
-          </div>
-          <div style={{ background: 'var(--c-surface-2)', borderRadius: 14, padding: '18px 20px', border: '1px solid var(--c-border)' }}>
-            <div style={{ fontSize: 11, color: 'var(--c-muted-2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Avg per Entry</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: COLORS.balance, marginTop: 8 }}>{formatTaka(myData.count ? myData.income / myData.count : 0)}</div>
-          </div>
-        </div>
-      </ChartShell>
+    <div className="page">
+      <PageHeading title={`Collector: ${myName}`} description="Review your collections and record transactions." action={
+        <button type="button" className="admin-button admin-button--quiet" onClick={onLogout}>
+          <LogOut size={17} aria-hidden="true" /> Sign out
+        </button>
+      } />
+      <div className="chart-grid-3">
+        <Kpi label="Total income" value={formatTaka(myData.income)} color={COLORS.income} icon={<ArrowDownLeft size={20} aria-hidden="true" />} />
+        <Kpi label="Transactions" value={myData.count} icon={<List size={20} aria-hidden="true" />} />
+        <Kpi label="Average per entry" value={formatTaka(myData.count ? myData.income / myData.count : 0)} color={COLORS.balance} icon={<Calculator size={20} aria-hidden="true" />} />
+      </div>
 
       <TransactionForm enteredBy={myName} />
 
-      <ChartShell title="Your Transactions" subtitle="Recent entries you recorded">
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid var(--c-border-strong)' }}>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Date</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Category</th>
-                <th style={{ padding: '12px 14px', textAlign: 'right', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Amount</th>
-                <th style={{ padding: '12px 14px', textAlign: 'left', fontSize: 12, color: 'var(--c-muted)', textTransform: 'uppercase' }}>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myData.transactions?.slice(0, 20).map((t, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--c-border)' }}>
-                  <td style={{ padding: '12px 14px', color: 'var(--c-ink-2)' }}>{t.date}</td>
-                  <td style={{ padding: '12px 14px', color: 'var(--c-ink-2)' }}>{t.category}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: COLORS.income }}>{formatTaka(t.amount)}</td>
-                  <td style={{ padding: '12px 14px', color: 'var(--c-muted)', fontSize: 13 }}>{t.note}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <ChartShell title="Your transactions" subtitle="Recent entries you recorded">
+        <TableShell data={myData.transactions?.slice(0, 20)} columns={[
+          { header: 'Date', key: 'date' },
+          { header: 'Category', key: 'category' },
+          { header: 'Amount', key: 'amount', align: 'right', render: row => <strong style={{ color: COLORS.income }}>{formatTaka(row.amount)}</strong> },
+          { header: 'Note', key: 'note' },
+        ]} />
       </ChartShell>
     </div>
   )

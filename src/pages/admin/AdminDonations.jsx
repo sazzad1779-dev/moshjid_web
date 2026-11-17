@@ -73,7 +73,7 @@ export default function AdminDonations() {
 
   return (
     <>
-      <PageTitle eyebrow="Contributions" title="Monthly dues" description="A complete member-by-member view of dues and payments." />
+      <PageTitle title="Monthly dues" description="A complete member-by-member view of dues and payments." />
       {refreshing && <div className="admin-data-status" role="status">Checking confirmed Imam Hadya transactions and refreshing monthly dues…</div>}
       {refreshError && <div className="admin-data-status admin-data-status--error" role="alert">{refreshError}</div>}
       {refreshMessage && <div className="admin-data-status" role="status">{refreshMessage}</div>}

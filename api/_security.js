@@ -1,3 +1,5 @@
+import { jwtVerify } from 'jose'
+
 // Shared security helpers for all API handlers.
 //
 // Fail-safe secret handling: there is intentionally NO hardcoded fallback for
@@ -73,4 +75,17 @@ export function readSessionToken(req) {
   const cookie = req.headers.cookie || ''
   const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`))
   return match ? match[1] : null
+}
+
+export async function verifySession(req) {
+  const secret = getSecret()
+  const token = readSessionToken(req)
+  if (!secret || !token) return null
+
+  try {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { clockTolerance: 60 })
+    return payload
+  } catch {
+    return null
+  }
 }

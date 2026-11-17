@@ -1,111 +1,47 @@
 import React from 'react'
 
-const styles = {
-  container: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: 12,
-    marginBottom: 20,
-    padding: 16,
-    background: 'var(--c-surface-2)',
-    borderRadius: 12,
-    border: '1px solid var(--c-border)',
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  label: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: 'var(--c-muted-2)',
-    textTransform: 'uppercase',
-    letterSpacing: '0.1em',
-  },
-  input: {
-    marginTop: 6,
-    border: '1px solid var(--c-border-strong)',
-    borderRadius: 10,
-    padding: '10px 12px',
-    fontSize: 14,
-    background: 'var(--c-surface)',
-    color: 'var(--c-ink)',
-    fontFamily: 'inherit',
-    outline: 'none',
-    transition: 'border-color 0.2s, box-shadow 0.2s',
-  },
-  row: {
-    display: 'flex',
-    gap: 8,
-  }
-}
-
-export default function TransactionFilters({ 
+export default function TransactionFilters({
   search, onSearchChange,
   type, onTypeChange,
   category, onCategoryChange,
   categories,
   dateStart, onDateStartChange,
   dateEnd, onDateEndChange,
-  onClear 
 }) {
   return (
-    <div style={styles.container}>
-      <div style={styles.field}>
-        <label style={styles.label}>Search</label>
-        <input 
-          type="text" 
-          placeholder="Search by category, note, date..."
+    <div className="transaction-filters">
+      <label className="transaction-filters__search">
+        Search
+        <input
+          type="search"
+          placeholder="Category, note, or date"
           value={search}
-          onChange={e => onSearchChange(e.target.value)}
-          style={styles.input}
+          onChange={event => onSearchChange(event.target.value)}
         />
-      </div>
-
-      <div style={styles.field}>
-        <label style={styles.label}>Type</label>
-        <select 
-          value={type} 
-          onChange={e => onTypeChange(e.target.value)} 
-          style={styles.input}
-        >
-          <option value="all">All Types</option>
+      </label>
+      <label>
+        Type
+        <select value={type} onChange={event => onTypeChange(event.target.value)}>
+          <option value="all">All types</option>
           <option value="income">Income</option>
           <option value="expense">Expense</option>
         </select>
-      </div>
-
-      <div style={styles.field}>
-        <label style={styles.label}>Category</label>
-        <select 
-          value={category} 
-          onChange={e => onCategoryChange(e.target.value)} 
-          style={styles.input}
-        >
-          <option value="all">All Categories</option>
-          {categories.map(c => (
-            <option key={c} value={c}>{c}</option>
-          ))}
+      </label>
+      <label>
+        Category
+        <select value={category} onChange={event => onCategoryChange(event.target.value)}>
+          <option value="all">All categories</option>
+          {categories.map(item => <option key={item} value={item}>{item}</option>)}
         </select>
-      </div>
-
-      <div style={styles.field}>
-        <label style={styles.label}>Date Range</label>
-        <div style={styles.row}>
-          <input 
-            type="date" 
-            value={dateStart}
-            onChange={e => onDateStartChange(e.target.value)}
-            style={styles.input}
-          />
-          <input 
-            type="date" 
-            value={dateEnd}
-            onChange={e => onDateEndChange(e.target.value)}
-            style={styles.input}
-          />
-        </div>
-      </div>
+      </label>
+      <label>
+        From
+        <input type="date" value={dateStart} onChange={event => onDateStartChange(event.target.value)} />
+      </label>
+      <label>
+        To
+        <input type="date" value={dateEnd} onChange={event => onDateEndChange(event.target.value)} />
+      </label>
     </div>
   )
 }

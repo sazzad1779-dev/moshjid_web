@@ -1,0 +1,148 @@
+.prayer-times__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.prayer-times__icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  background: var(--c-primary-soft);
+  color: var(--c-primary);
+}
+
+.prayer-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: clamp(16px, 3vw, 26px);
+  border-radius: var(--radius-sm);
+  background: var(--grad-hero);
+  color: #fff;
+}
+
+.prayer-next__label {
+  display: block;
+  color: #daebe0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.prayer-next__name,
+.prayer-next__timer {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  font-weight: 750;
+}
+
+.prayer-next__name time {
+  display: inline-block;
+  margin-inline-start: 6px;
+  color: #e9d3a5;
+  font-size: 0.75em;
+}
+
+.prayer-next__timer {
+  font-variant-numeric: tabular-nums;
+}
+
+.prayer-times__schedule {
+  margin-top: 20px;
+}
+
+.prayer-times__schedule-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.prayer-times__schedule-heading h3 {
+  font-size: 14px;
+}
+
+.prayer-times__schedule-heading span,
+.prayer-times__message,
+.prayer-times__friday {
+  color: var(--c-muted);
+  font-size: 13px;
+}
+
+.prayer-times__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+  gap: 8px;
+  list-style: none;
+}
+
+.prayer-slot {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-xs);
+  background: var(--c-surface);
+}
+
+.prayer-slot time {
+  font-size: 16px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.prayer-slot__name {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.prayer-slot__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.prayer-slot--passed {
+  background: var(--c-surface-3);
+  color: var(--c-muted);
+}
+
+.prayer-slot--next {
+  border-color: var(--tint-income-border);
+  background: var(--tint-income);
+  color: var(--c-income);
+}
+
+.prayer-slot--next .prayer-slot__status {
+  color: inherit;
+  font-weight: 700;
+}
+
+.prayer-times__friday {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.prayer-times__friday time {
+  color: var(--c-ink);
+  font-weight: 700;
+}
+
+.prayer-times__message button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}

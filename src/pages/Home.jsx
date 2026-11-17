@@ -1,4 +1,6 @@
 import React from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowRight } from 'lucide-react'
 import ChartShell from '../components/ChartShell.jsx'
 import TableShell from '../components/TableShell.jsx'
 import StatusDot from '../components/StatusDot.jsx'
@@ -45,50 +47,29 @@ const QURAN = [
   }
 ]
 
-const FEATURES = [
-  { icon: '🔍', title: 'স্বচ্ছ হিসাব', desc: 'প্রতিটি টাকার উৎস ও খরচের বিবরণ সবার সামনে খোলা' },
-  { icon: '🏦', title: 'মাসিক পরিকল্পনা', desc: 'মাস ভিত্তিক আয়-ব্যয় বিশ্লেষণ ও ভবিষ্যৎ পরিকল্পনা' },
-  { icon: '🤲', title: 'জমিয়াতুল ফয়দ', desc: 'সদকায়ে জারিয়াহর মাধ্যমে নেকি অর্জন' },
-  { icon: '⏱️', title: 'রিয়েল-টাইম', desc: 'রিয়েল-টাইম তথ্য আপডেট' },
-]
-
 export default function Home({ rows = [] }) {
   const recent = [...rows]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
     .slice(0, 10)
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
+    <div className="page">
 
-      {/* ── Hero Message ── */}
-      <ChartShell title="" style={{ textAlign: 'center', padding: '40px 30px', background: 'var(--grad-brand-soft)', borderColor: 'transparent' }}>
-
-        <h2 style={{ fontSize: 28, fontWeight: 800, color: '#fff', margin: 0, lineHeight: 1.4 }}>
-          "দান দেখুন, খরচ জানুন, মসজিদ গড়ুন"
-        </h2>
-        <p style={{ color: '#e9f5ea', fontSize: 16, marginTop: 14, maxWidth: 600, margin: '14px auto 0', lineHeight: 1.7 }}>
-          আমাদের এই ছোট্ট প্রচেষ্টা — মসজিদের প্রতিটি টাকার হিসাব সবার সামনে খোলা রাখা।
-          আপনার দান, আমাদের দায়িত্ব। আল্লাহ কবুল করুন।
-        </p>
+      <ChartShell title="Recent transactions" subtitle="Latest 10 financial activities" action={
+        <Link className="text-link" to="/transactions">View all <ArrowRight size={16} aria-hidden="true" /></Link>
+      }>
+        <TableShell
+          data={recent}
+          columns={[
+            { header: 'Date', key: 'date', width: '120px', render: r => formatDate(r.date) },
+            { header: 'Type', key: 'type', render: r => <StatusDot type={r.type} /> },
+            { header: 'Category', key: 'category' },
+            { header: 'Amount', key: 'amount', align: 'right',
+              render: r => <strong style={{ color: r.type === 'income' ? COLORS.income : COLORS.expense }}>{formatTaka(r.amount)}</strong> },
+            { header: 'Note', key: 'note' },
+          ]}
+        />
       </ChartShell>
-
-      {/* ── Features ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
-        {FEATURES.map((f, i) => (
-          <div key={i} style={{
-            background: 'var(--c-surface)', borderRadius: 16, padding: '24px 20px',
-            boxShadow: 'var(--shadow-card)', border: '1px solid var(--c-border)',
-            textAlign: 'center', transition: 'transform 0.2s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
-          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <div style={{ fontSize: 36, marginBottom: 12 }}>{f.icon}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--c-primary)', marginBottom: 6 }}>{f.title}</div>
-            <div style={{ fontSize: 13, color: 'var(--c-muted)', lineHeight: 1.6 }}>{f.desc}</div>
-          </div>
-        ))}
-      </div>
 
       {/* ── Quran Verses ── */}
       <ChartShell title="কুরআনের আয়াত" subtitle="দান ও সদকা সম্পর্কে মহান আল্লাহর বাণী">
@@ -151,20 +132,6 @@ export default function Home({ rows = [] }) {
           — সহীহ মুসলিম ১৬৩১
         </div>
       </div>
-
-      <ChartShell title="Recent Transactions" subtitle="Latest 10 financial activities">
-        <TableShell
-          data={recent}
-          columns={[
-            { header: 'Date', key: 'date', width: '120px', render: r => formatDate(r.date) },
-            { header: 'Type', key: 'type', render: r => <StatusDot type={r.type} /> },
-            { header: 'Category', key: 'category' },
-            { header: 'Amount', key: 'amount', align: 'right',
-              render: r => <strong style={{ color: r.type === 'income' ? COLORS.income : COLORS.expense }}>{formatTaka(r.amount)}</strong> },
-            { header: 'Note', key: 'note' },
-          ]}
-        />
-      </ChartShell>
     </div>
   )
 }

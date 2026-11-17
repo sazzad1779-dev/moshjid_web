@@ -162,7 +162,6 @@ export default function AdminTransactions({ transactionForm }) {
   return (
     <>
       <PageTitle
-        eyebrow="Finance"
         title="Transactions"
         description="View and manage transaction records stored in the database."
         action={transactionForm && <button type="button" className="admin-button admin-button--primary" onClick={() => setAdding(current => !current)}>{adding ? <X size={16} /> : <Plus size={16} />}{adding ? 'Close form' : 'Add transaction'}</button>}

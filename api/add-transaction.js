@@ -183,6 +183,10 @@ export default async function handler(req, res) {
   }
   const selectedDuePeriods = []
   if (dueMonths.length) {
+    if (!selectedMemberId && !donor) {
+      res.status(400).json({ error: 'Invalid member. Select an existing member or enter a new member name.' })
+      return
+    }
     const selectedYear = Number(dueYear)
     if (!Number.isInteger(selectedYear) || selectedYear < 2000 || selectedYear > 2200) {
       res.status(400).json({ error: 'Invalid month year' })
@@ -211,21 +215,6 @@ export default async function handler(req, res) {
     ])
     if (!categoryTypes.rows.some(row => row.type === type)) throw new Error('Invalid type')
     if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
-    if (selectedMemberId) {
-      const memberResult = await pool.query(
-        `SELECT id FROM profiles
-          WHERE id = $1::uuid AND role::text = 'member'
-            AND status::text = 'active' AND is_deleted = false`,
-        [selectedMemberId]
-      )
-      if (!memberResult.rows[0]) throw new Error('Invalid member')
-    }
-    let isNewMember = false
-    if (!selectedMemberId && donor) {
-      const resolved = await resolveMemberProfile(pool, donor)
-      selectedMemberId = resolved.id
-      isNewMember = resolved.isNew
-    }
     const categoryId = await resolveCategoryId(pool, category, type)
     const profileId = await resolveProfile(pool, collectorName, session.role)
     const collectorId = session.role === 'collector' ? profileId : null
@@ -235,8 +224,25 @@ export default async function handler(req, res) {
 
     const client = await pool.connect()
     let inserted = null
+    let isNewMember = false
     try {
       await client.query('BEGIN')
+      if (selectedMemberId) {
+        const memberResult = await client.query(
+          `SELECT id FROM profiles
+            WHERE id = $1::uuid AND role::text = 'member'
+              AND status::text = 'active' AND is_deleted = false`,
+          [selectedMemberId]
+        )
+        if (!memberResult.rows[0]) throw new Error('Invalid member')
+      }
+      if (!selectedMemberId && donor) {
+        // Concurrent transactions for the same typed name should resolve one profile.
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1), 0)', [donor])
+        const resolved = await resolveMemberProfile(client, donor)
+        selectedMemberId = resolved.id
+        isNewMember = resolved.isNew
+      }
       for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
         const receiptNumber = genReceiptNumber(prefix)
         try {

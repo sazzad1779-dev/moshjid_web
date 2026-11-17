@@ -136,7 +136,6 @@ export default function AdminMembers() {
   return (
     <>
       <PageTitle
-        eyebrow="People"
         title="Members"
         description="Member profiles loaded from the database."
         action={<button type="button" className="admin-button admin-button--primary" onClick={startAdding}><Plus size={16} />Add member</button>}

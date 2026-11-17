@@ -164,6 +164,8 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at              timestamptz NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS prayer_times jsonb;
+
 -- ── Audit logs ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_logs (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),

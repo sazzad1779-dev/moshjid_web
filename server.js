@@ -10,6 +10,7 @@ const handlers = {
   transactions:    (await import('./api/transactions.js')).default,
   auth:            (await import('./api/auth.js')).default,
   collectors:      (await import('./api/collectors.js')).default,
+  'prayer-times':  (await import('./api/prayer-times.js')).default,
   'admin-data':    (await import('./api/admin-data.js')).default,
   'add-transaction': (await import('./api/add-transaction.js')).default,
   'member-search':  (await import('./api/member-search.js')).default,

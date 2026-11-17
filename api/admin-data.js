@@ -1,25 +1,11 @@
-import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
 import { getEnumValues } from './_enum-values.js'
-import { getSecret, applyCors, readSessionToken } from './_security.js'
+import { applyCors, verifySession } from './_security.js'
 import { recalculateMonthlyDues, syncMonthlyDueForTransaction } from './_monthly-dues.js'
 
 const PAGE_SIZE_MAX = 50
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
-
-async function verifySession(req) {
-  const secret = getSecret()
-  const token = readSessionToken(req)
-  if (!secret || !token) return null
-
-  try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { clockTolerance: 60 })
-    return payload
-  } catch {
-    return null
-  }
-}
 
 function getIntegerParam(searchParams, key, fallback, min, max) {
   const raw = searchParams.get(key)
@@ -271,6 +257,12 @@ async function createMember(pool, body) {
 
 async function updateMember(pool, body) {
   const member = await getMemberInput(pool, body, true)
+  const { paymentTransactionId } = body
+  if (paymentTransactionId !== undefined && (
+    typeof paymentTransactionId !== 'string' || !paymentTransactionId || paymentTransactionId.length > 100
+  )) {
+    throw new Error('Invalid payment transaction')
+  }
   const client = await pool.connect()
   let transactionIds = []
   try {
@@ -283,15 +275,26 @@ async function updateMember(pool, body) {
               status = $4::user_status,
               area_id = $5::uuid,
               address = $6,
-              monthly_amount = $7::numeric,
+              monthly_amount = CASE WHEN $9::boolean THEN $7::numeric ELSE monthly_amount END,
               updated_at = NOW()
         WHERE id = $8::uuid AND role::text = 'member' AND is_deleted = false
         RETURNING id::text AS id`,
-      [member.fullName, member.phone, member.email, member.status, member.areaId, member.address, member.monthlyAmount, member.id]
+      [member.fullName, member.phone, member.email, member.status, member.areaId, member.address, member.monthlyAmount, member.id, Object.hasOwn(body, 'monthlyAmount')]
     )
     if (!result.rows[0]) {
       await client.query('ROLLBACK')
       return false
+    }
+
+    if (paymentTransactionId && member.monthlyAmount > 0) {
+      const payment = await client.query(
+        `SELECT t.id FROM transactions t
+          WHERE t.id::text = $1 AND t.member_id = $2::uuid
+            AND EXISTS (SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text)`,
+        [paymentTransactionId, member.id]
+      )
+      if (!payment.rowCount) throw new Error('Invalid payment transaction for this member')
+      await syncMonthlyDueForTransaction(client, paymentTransactionId)
     }
 
     const transactions = await client.query(
@@ -306,7 +309,7 @@ async function updateMember(pool, body) {
         ORDER BY date_trunc('month', t.date), t.date, t.id`,
       [member.id]
     )
-    transactionIds = transactions.rows.map(row => row.id)
+    transactionIds = transactions.rows.map(row => row.id).filter(id => id !== paymentTransactionId)
     await client.query('COMMIT')
   } catch (error) {
     await client.query('ROLLBACK')
@@ -1000,7 +1003,7 @@ async function getDuesMatrix(pool, searchParams) {
       const stored = storedMonths[month]
       const amountDue = stored?.amountDue ?? Number(row.monthly_amount || 0)
       const amountPaid = payments[month]?.amountPaid || 0
-      if (amountDue <= 0) continue
+      if (amountDue <= 0 && !(stored && amountPaid > 0)) continue
       const status = stored?.status === 'waived'
         ? 'waived'
         : amountPaid >= amountDue
@@ -1137,7 +1140,8 @@ async function getDuesMatrix(pool, searchParams) {
        SELECT dp.member_id, dp.period,
               COALESCE(md.amount_due, p.monthly_amount, 0)::numeric AS amount_due,
               COALESCE(pt.amount_paid, 0)::numeric AS amount_paid,
-              COALESCE(md.status::text, 'unpaid') AS status
+              COALESCE(md.status::text, 'unpaid') AS status,
+              md.id IS NOT NULL AS has_stored_due
          FROM due_periods dp
          JOIN profiles p ON p.id = dp.member_id
          LEFT JOIN monthly_dues md
@@ -1153,7 +1157,7 @@ async function getDuesMatrix(pool, searchParams) {
               0
             )::numeric AS balance
        FROM monthly
-      WHERE amount_due > 0`,
+      WHERE amount_due > 0 OR (has_stored_due AND amount_paid > 0)`,
     [year]
   )
 

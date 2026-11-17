@@ -11,6 +11,7 @@ collector-wise reporting.
 
 ## Features
 
+- Homepage prayer schedule with a live countdown in Dhaka time, published from Admin → Settings
 - Public tabs: Home, Dashboard (analytics), Monthly (finance), Transactions (records)
 - KPI cards: total income, total expense, net balance, transaction count
 - Charts: monthly trend, category radar, income/expense pie charts, day-by-day activity
@@ -67,7 +68,9 @@ Browser (React/Vite)
    ```
 
    For an existing project, rerun the schema script to apply idempotent migrations,
-   including the `profiles.monthly_amount` column and monthly-dues index.
+   including the `profiles.monthly_amount` column, monthly-dues index, and
+   `settings.prayer_times` column. After migration, confirm all six times in
+   **Admin → Settings** and select **Publish prayer times**.
 
 3. Copy the pooled connection string from **Project Settings → Database → Connection
    string** — this is your `DATABASE_URL`.

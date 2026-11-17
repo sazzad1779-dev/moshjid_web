@@ -2,28 +2,17 @@ import React from 'react'
 import {
   ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Bell, ChevronLeft, ChevronRight, Pencil, Trash2,
 } from 'lucide-react'
+import PageHeading from '../../components/PageHeading.jsx'
 import { formatDate, formatTaka } from '../../utils/formatters.js'
 
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 export const INITIAL_SETTINGS = {
-  fajr: '04:45', dhuhr: '13:15', asr: '16:30', maghrib: '18:05', isha: '19:30',
   welcomeText: 'Welcome to our mosque community.',
   announcement: 'Jummah prayer will be held at 1:30 PM this Friday.',
 }
 export const PAGE_SIZE = 8
 
-export function PageTitle({ eyebrow, title, description, action }) {
-  return (
-    <div className="admin-page-title">
-      <div>
-        <div className="admin-eyebrow">{eyebrow}</div>
-        <h1>{title}</h1>
-        <p>{description}</p>
-      </div>
-      {action}
-    </div>
-  )
-}
+export { PageHeading as PageTitle }
 
 export function PreviewNotice({ children }) {
   return <div className="admin-preview-notice"><Bell size={15} aria-hidden="true" />{children}</div>
