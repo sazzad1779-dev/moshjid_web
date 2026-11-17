@@ -10,11 +10,13 @@ import { COLORS } from '../constants.js'
 import AdminWorkspace from './AdminWorkspace.jsx'
 
 const lbl = { display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--c-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }
+const DUE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 // ── Transaction Form ──
 function TransactionForm({ enteredBy, onSaved }) {
   const { role } = useAuth()
-  const empty = { date: new Date().toISOString().split('T')[0], type: 'income', category: '', description: '', amount: '', paymentMethod: '', notes: '', donorName: '', memberId: '' }
+  const today = new Date().toISOString().split('T')[0]
+  const empty = { date: today, type: 'income', category: '', description: '', amount: '', paymentMethod: '', notes: '', donorName: '', memberId: '', dueMonths: [], dueYear: Number(today.slice(0, 4)) }
   const [form, setForm] = useState(empty)
   const [status, setStatus] = useState(null)
   const [errMsg, setErrMsg] = useState('')
@@ -93,6 +95,7 @@ function TransactionForm({ enteredBy, onSaved }) {
       ? 'income'
       : (transactionTypes[0] || '')
   const categories = categoryRows.filter(item => item.type === selectedType).map(item => item.name)
+  const isMonthlyDueCategory = selectedType === 'income' && /^imam hadi?ya$/i.test(form.category.trim())
   const paymentMethods = metadata?.paymentMethods || []
   const selectedPaymentMethod = paymentMethods.includes(form.paymentMethod) ? form.paymentMethod : paymentMethods[0] || ''
   const userStatuses = metadata?.userStatuses || []
@@ -193,11 +196,13 @@ function TransactionForm({ enteredBy, onSaved }) {
         <div className="form-grid-2">
           <div>
             <label style={lbl}>Date / তারিখ *</label>
-            <input type="date" required value={form.date} onChange={e => set('date', e.target.value)} {...inp()} />
+            <input type="date" required value={form.date} onChange={e => {
+              setForm(current => ({ ...current, date: e.target.value, dueYear: Number(e.target.value.slice(0, 4)) }))
+            }} {...inp()} />
           </div>
           <div>
             <label style={lbl}>Type / ধরন *</label>
-            <select required disabled={!transactionTypes.length || metadataStatus !== 'ready'} value={selectedType} onChange={e => { set('type', e.target.value); set('category', '') }} {...inp()}>
+            <select required disabled={!transactionTypes.length || metadataStatus !== 'ready'} value={selectedType} onChange={e => { set('type', e.target.value); set('category', ''); set('dueMonths', []) }} {...inp()}>
               {transactionTypes.map(value => <option key={value} value={value}>{value}</option>)}
             </select>
           </div>
@@ -205,7 +210,7 @@ function TransactionForm({ enteredBy, onSaved }) {
 
         <div>
           <label style={lbl}>Category / ক্যাটাগরি *</label>
-          <select required disabled={!categories.length || metadataStatus !== 'ready'} value={form.category} onChange={e => set('category', e.target.value)} {...inp()}>
+          <select required disabled={!categories.length || metadataStatus !== 'ready'} value={form.category} onChange={e => { set('category', e.target.value); set('dueMonths', []) }} {...inp()}>
             <option value="">— Select —</option>
             {categories.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
@@ -263,6 +268,60 @@ function TransactionForm({ enteredBy, onSaved }) {
           {memberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">Could not search members: {memberSearchError}</small>}
           {form.memberId && <small className="transaction-member-search-status">Selected member will be linked to this transaction.</small>}
         </div>
+
+        {isMonthlyDueCategory && (
+          <div className="form-grid-2">
+            <div>
+              <label style={lbl}>Monthly dues months (optional)</label>
+              <details style={{ border: '1px solid var(--c-border-strong)', borderRadius: 10, background: 'var(--c-surface)' }}>
+                <summary
+                  title={form.dueMonths.map(month => DUE_MONTHS[month - 1]).join(', ')}
+                  style={{ padding: '11px 14px', color: 'var(--c-ink)', cursor: 'pointer', fontSize: 14 }}
+                >
+                  {form.dueMonths.length
+                    ? `${form.dueMonths.length} month${form.dueMonths.length === 1 ? '' : 's'} selected`
+                    : 'Use transaction date month'}
+                </summary>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8, padding: '4px 14px 14px' }}>
+                  {DUE_MONTHS.map((month, index) => {
+                    const monthNumber = index + 1
+                    return (
+                      <label key={month} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--c-ink)', fontSize: 13, textTransform: 'none', letterSpacing: 0 }}>
+                        <input
+                          type="checkbox"
+                          checked={form.dueMonths.includes(monthNumber)}
+                          onChange={event => set('dueMonths', event.target.checked
+                            ? [...form.dueMonths, monthNumber].sort((a, b) => a - b)
+                            : form.dueMonths.filter(value => value !== monthNumber))}
+                        />
+                        {month}
+                      </label>
+                    )
+                  })}
+                </div>
+              </details>
+              <small style={{ display: 'block', marginTop: 6, color: 'var(--c-muted)', fontSize: 12 }}>
+                {form.dueMonths.length
+                  ? 'Requires a linked member with a configured monthly amount. The total payment will be split across the selected months.'
+                  : 'If no month is selected, the transaction date month is used.'}
+              </small>
+            </div>
+            {form.dueMonths.length > 0 && (
+              <div>
+                <label style={lbl}>Year for selected months</label>
+                <input
+                  type="number"
+                  min="2000"
+                  max="2200"
+                  required
+                  value={form.dueYear}
+                  onChange={event => set('dueYear', event.target.value)}
+                  {...inp()}
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="form-grid-2">
           <div>

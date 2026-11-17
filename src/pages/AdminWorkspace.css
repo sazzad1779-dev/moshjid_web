@@ -325,6 +325,10 @@
   transform: translateY(1px);
 }
 
+.admin-spin {
+  animation: spin 0.9s linear infinite;
+}
+
 .admin-button--primary {
   color: var(--c-on-primary);
   background: var(--c-primary-button);
@@ -1039,6 +1043,48 @@
 
 .admin-form--transaction-note {
   grid-column: 1 / -1;
+}
+
+.admin-transaction-month-picker {
+  border: 1px solid var(--c-border-strong);
+  border-radius: 8px;
+  background: var(--c-surface);
+}
+
+.admin-transaction-month-picker summary {
+  padding: 9px 11px;
+  color: var(--c-ink);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.admin-transaction-month-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  padding: 4px 11px 11px;
+}
+
+.admin-form .admin-transaction-month-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.admin-form .admin-transaction-month-options input[type='checkbox'] {
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.admin-form--transaction-note > small {
+  color: var(--c-muted-2);
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .admin-form--member-address {

@@ -2,8 +2,11 @@ import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
 import { getEnumValues } from './_enum-values.js'
 import { getSecret, applyCors, readSessionToken } from './_security.js'
+import { recalculateMonthlyDues, syncMonthlyDueForTransaction } from './_monthly-dues.js'
 
 const PAGE_SIZE_MAX = 50
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 async function verifySession(req) {
   const secret = getSecret()
@@ -90,6 +93,8 @@ function mapTransaction(row) {
     paymentMethod: row.payment_method || 'cash',
     donorName: row.donor_name || '',
     memberName: row.member_name || '',
+    dueMonths: row.due_months || [],
+    dueYear: row.due_year || Number(row.date?.slice(0, 4)),
     receiptNumber: row.receipt_number || '',
   }
 }
@@ -105,13 +110,25 @@ const TRANSACTION_SELECT = `
          t.payment_method::text AS payment_method,
          t.donor_name,
          p.full_name AS member_name,
+         COALESCE((
+           SELECT array_agg(EXTRACT(MONTH FROM md.period)::int ORDER BY md.period)
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+            WHERE mdp.transaction_id = t.id::text
+         ), ARRAY[]::int[]) AS due_months,
+         (
+           SELECT EXTRACT(YEAR FROM MIN(md.period))::int
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+            WHERE mdp.transaction_id = t.id::text
+         ) AS due_year,
          t.receipt_number
     FROM transactions t
     LEFT JOIN transaction_categories tc ON tc.id = t.category_id
     LEFT JOIN profiles p ON p.id = t.member_id`
 
 async function getTransactionInput(pool, body) {
-  const { id, date, type, category, amount, note, paymentMethod, donorName } = body || {}
+  const { id, date, type, category, amount, note, paymentMethod, donorName, dueMonths } = body || {}
   if (typeof id !== 'string' || id.length < 1 || id.length > 100) throw new Error('Invalid transaction id')
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('Invalid date')
   const parsedDate = new Date(`${date}T00:00:00.000Z`)
@@ -124,6 +141,24 @@ async function getTransactionInput(pool, body) {
   if (typeof paymentMethod !== 'string' || !enums.payment_method.includes(paymentMethod)) throw new Error('Invalid payment method')
   if (typeof note !== 'string' || note.length > 5000) throw new Error('Invalid description')
   if (typeof donorName !== 'string' || donorName.length > 500) throw new Error('Invalid donor name')
+  if (dueMonths !== undefined && (!Array.isArray(dueMonths)
+      || dueMonths.length > 12
+      || dueMonths.some(month => !Number.isInteger(month) || month < 1 || month > 12)
+      || new Set(dueMonths).size !== dueMonths.length)) {
+    throw new Error('Invalid month selection')
+  }
+  let duePeriods
+  if (dueMonths !== undefined) {
+    duePeriods = []
+    if (dueMonths.length) {
+      const dueYear = Number(body.dueYear)
+      if (!Number.isInteger(dueYear) || dueYear < 2000 || dueYear > 2200) throw new Error('Invalid month year')
+      duePeriods = dueMonths
+        .slice()
+        .sort((a, b) => a - b)
+        .map(month => `${dueYear}-${String(month).padStart(2, '0')}-01`)
+    }
+  }
 
   return {
     id,
@@ -134,6 +169,7 @@ async function getTransactionInput(pool, body) {
     note: note.trim(),
     paymentMethod,
     donorName: donorName.trim() || null,
+    duePeriods,
   }
 }
 
@@ -181,32 +217,121 @@ async function getMemberInput(pool, body, includeId = false) {
 
 async function createMember(pool, body) {
   const member = await getMemberInput(pool, body)
-  await pool.query(
-    `INSERT INTO profiles (full_name, phone, email, role, status, area_id, address, monthly_amount)
-     VALUES ($1, $2, $3, $4::user_role, $5::user_status, $6::uuid, $7, $8::numeric)
-     RETURNING id`,
-    [member.fullName, member.phone, member.email, member.role, member.status, member.areaId, member.address, member.monthlyAmount]
-  )
+  if (!SUPABASE_URL || !SERVICE_ROLE_KEY) {
+    throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required to create a member')
+  }
+
+  const authResponse = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      apikey: SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: `member-${crypto.randomUUID()}@moshjid.local`,
+      password: crypto.randomUUID(),
+      email_confirm: true,
+      user_metadata: { full_name: member.fullName },
+      app_metadata: { provider: 'pin' },
+    }),
+  })
+  if (!authResponse.ok) {
+    throw new Error(`Failed to create member auth user (HTTP ${authResponse.status})`)
+  }
+
+  const authUser = await authResponse.json()
+  if (typeof authUser.id !== 'string' || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(authUser.id)) {
+    throw new Error('Supabase returned an invalid member auth user id')
+  }
+
+  try {
+    await pool.query(
+      `INSERT INTO profiles (id, full_name, phone, email, role, status, area_id, address, monthly_amount)
+       VALUES ($1::uuid, $2, $3, $4, $5::user_role, $6::user_status, $7::uuid, $8, $9::numeric)
+       RETURNING id`,
+      [authUser.id, member.fullName, member.phone, member.email, member.role, member.status, member.areaId, member.address, member.monthlyAmount]
+    )
+  } catch (error) {
+    try {
+      const cleanupResponse = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${authUser.id}`, {
+        method: 'DELETE',
+        headers: { apikey: SERVICE_ROLE_KEY, Authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+      })
+      if (!cleanupResponse.ok) {
+        console.error(`Failed to clean up auth user ${authUser.id} after member profile insert failed (HTTP ${cleanupResponse.status})`)
+      }
+    } catch (cleanupError) {
+      console.error(`Failed to clean up auth user ${authUser.id} after member profile insert failed:`, cleanupError)
+    }
+    throw error
+  }
   return true
 }
 
 async function updateMember(pool, body) {
   const member = await getMemberInput(pool, body, true)
-  const result = await pool.query(
-    `UPDATE profiles
-        SET full_name = $1,
-            phone = $2,
-            email = $3,
-            status = $4::user_status,
-            area_id = $5::uuid,
-            address = $6,
-            monthly_amount = $7::numeric,
-            updated_at = NOW()
-      WHERE id = $8::uuid AND role::text = 'member' AND is_deleted = false
-      RETURNING id`,
-    [member.fullName, member.phone, member.email, member.status, member.areaId, member.address, member.monthlyAmount, member.id]
-  )
-  return Boolean(result.rows[0])
+  const client = await pool.connect()
+  let transactionIds = []
+  try {
+    await client.query('BEGIN')
+    const result = await client.query(
+      `UPDATE profiles
+          SET full_name = $1,
+              phone = $2,
+              email = $3,
+              status = $4::user_status,
+              area_id = $5::uuid,
+              address = $6,
+              monthly_amount = $7::numeric,
+              updated_at = NOW()
+        WHERE id = $8::uuid AND role::text = 'member' AND is_deleted = false
+        RETURNING id::text AS id`,
+      [member.fullName, member.phone, member.email, member.status, member.areaId, member.address, member.monthlyAmount, member.id]
+    )
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK')
+      return false
+    }
+
+    const transactions = await client.query(
+      `SELECT DISTINCT ON (date_trunc('month', t.date)) t.id::text AS id
+         FROM transactions t
+         JOIN transaction_categories tc ON tc.id = t.category_id
+        WHERE t.member_id = $1::uuid
+          AND tc.type::text = 'income'
+          AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+          AND t.status::text = 'confirmed'
+          AND COALESCE(t.is_deleted, false) = false
+        ORDER BY date_trunc('month', t.date), t.date, t.id`,
+      [member.id]
+    )
+    transactionIds = transactions.rows.map(row => row.id)
+    await client.query('COMMIT')
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+
+  // Best-effort sync of monthly dues; never fail the member save because of it.
+  if (transactionIds.length) {
+    const syncClient = await pool.connect()
+    try {
+      await syncClient.query('BEGIN')
+      for (const transactionId of transactionIds) {
+        await syncMonthlyDueForTransaction(syncClient, transactionId)
+      }
+      await syncClient.query('COMMIT')
+    } catch (error) {
+      await syncClient.query('ROLLBACK')
+      console.error('Monthly dues sync after member update failed:', error)
+    } finally {
+      syncClient.release()
+    }
+  }
+  return true
 }
 
 async function softDeleteMember(pool, body) {
@@ -253,40 +378,151 @@ async function resolveCategoryId(pool, name, type) {
 
 async function updateTransaction(pool, body) {
   const transaction = await getTransactionInput(pool, body)
-  const existing = await pool.query(
-    'SELECT id FROM transactions WHERE id::text = $1 AND is_deleted = false',
-    [transaction.id]
-  )
-  if (!existing.rows[0]) return false
-
   const categoryId = await resolveCategoryId(pool, transaction.category, transaction.type)
-  const result = await pool.query(
-    `UPDATE transactions
-        SET date = $1::date,
-            category_id = $2::uuid,
-            amount = $3::numeric,
-            description = $4,
-            payment_method = $5::payment_method,
-            donor_name = $6,
-            updated_at = NOW()
-      WHERE id::text = $7 AND is_deleted = false
-      RETURNING id`,
-    [transaction.date, categoryId, transaction.amount, transaction.note, transaction.paymentMethod, transaction.donorName, transaction.id]
-  )
-  return Boolean(result.rows[0])
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query(
+      `UPDATE transactions
+          SET date = $1::date,
+              category_id = $2::uuid,
+              amount = $3::numeric,
+              description = $4,
+              payment_method = $5::payment_method,
+              donor_name = $6,
+              updated_at = NOW()
+        WHERE id::text = $7 AND is_deleted = false
+        RETURNING id`,
+      [transaction.date, categoryId, transaction.amount, transaction.note, transaction.paymentMethod, transaction.donorName, transaction.id]
+    )
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK')
+      return false
+    }
+    await syncMonthlyDueForTransaction(client, result.rows[0].id, transaction.duePeriods)
+    await client.query('COMMIT')
+    return true
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 async function deleteTransaction(pool, body) {
   const id = body?.id
   if (typeof id !== 'string' || id.length < 1 || id.length > 100) throw new Error('Invalid transaction id')
-  const result = await pool.query(
-    `UPDATE transactions
-        SET is_deleted = true, updated_at = NOW()
-      WHERE id::text = $1 AND is_deleted = false
-      RETURNING id`,
-    [id]
-  )
-  return Boolean(result.rows[0])
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query(
+      `UPDATE transactions
+          SET is_deleted = true, updated_at = NOW()
+        WHERE id::text = $1 AND is_deleted = false
+        RETURNING id`,
+      [id]
+    )
+    if (!result.rows[0]) {
+      await client.query('ROLLBACK')
+      return false
+    }
+    await syncMonthlyDueForTransaction(client, result.rows[0].id)
+    await client.query('COMMIT')
+    return true
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+async function refreshMonthlyDues(pool) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('refresh_imam_hadya_monthly_dues'))")
+
+    const inserted = await client.query(
+      `INSERT INTO monthly_dues
+         (member_id, period, amount_due, amount_paid, status, due_date)
+       SELECT DISTINCT ON (t.member_id, date_trunc('month', t.date))
+              t.member_id,
+              date_trunc('month', t.date)::date,
+              p.monthly_amount,
+              0,
+              'unpaid'::due_status,
+              (date_trunc('month', t.date) + INTERVAL '1 month - 1 day')::date
+         FROM transactions t
+         JOIN transaction_categories tc ON tc.id = t.category_id
+         JOIN profiles p ON p.id = t.member_id
+        WHERE tc.type::text = 'income'
+          AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+          AND t.status::text = 'confirmed'
+          AND COALESCE(t.is_deleted, false) = false
+          AND t.monthly_due_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+          )
+          AND COALESCE(p.monthly_amount, 0) > 0
+        ORDER BY t.member_id, date_trunc('month', t.date), t.date, t.id
+       ON CONFLICT (member_id, period) DO NOTHING
+       RETURNING id`
+    )
+
+    const linked = await client.query(
+      `UPDATE transactions t
+          SET monthly_due_id = md.id
+         FROM transaction_categories tc, profiles p, monthly_dues md
+        WHERE tc.id = t.category_id
+          AND p.id = t.member_id
+          AND COALESCE(p.monthly_amount, 0) > 0
+          AND t.member_id = md.member_id
+          AND t.date >= md.period
+          AND t.date < md.period + INTERVAL '1 month'
+          AND tc.type::text = 'income'
+          AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+          AND t.status::text = 'confirmed'
+          AND COALESCE(t.is_deleted, false) = false
+          AND t.monthly_due_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+          )
+        RETURNING t.monthly_due_id::text AS due_id`
+    )
+
+    await recalculateMonthlyDues(client, linked.rows.map(row => row.due_id))
+
+    const skipped = await client.query(
+      `SELECT count(DISTINCT (t.member_id, date_trunc('month', t.date)))::int AS count
+         FROM transactions t
+         JOIN transaction_categories tc ON tc.id = t.category_id
+         JOIN profiles p ON p.id = t.member_id
+        WHERE tc.type::text = 'income'
+          AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+          AND t.status::text = 'confirmed'
+          AND COALESCE(t.is_deleted, false) = false
+          AND t.member_id IS NOT NULL
+          AND t.monthly_due_id IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+          )
+          AND COALESCE(p.monthly_amount, 0) <= 0`
+    )
+
+    await client.query('COMMIT')
+    return {
+      insertedDues: inserted.rowCount,
+      linkedTransactions: linked.rowCount,
+      skippedMonthsWithoutMonthlyAmount: skipped.rows[0].count,
+    }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 async function getTransactions(pool, searchParams, resource) {
@@ -469,71 +705,6 @@ async function getDues(pool, searchParams) {
 }
 
 
-async function generateMonthlyDues(pool, year) {
-  const membersResult = await pool.query(
-    `SELECT id, monthly_amount
-       FROM profiles
-      WHERE role::text = 'member'
-        AND status::text = 'active'
-        AND approval_status::text = 'approved'
-        AND COALESCE(is_deleted, false) = false
-        AND COALESCE(monthly_amount, 0) > 0`
-  )
-
-  let generated = 0
-  for (const member of membersResult.rows) {
-    for (let month = 1; month <= 12; month++) {
-      const period = `${year}-${String(month).padStart(2, '0')}-01`
-      const dueDate = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
-      const result = await pool.query(
-        `INSERT INTO monthly_dues (member_id, period, amount_due, amount_paid, status, due_date)
-         VALUES ($1::uuid, $2::date, $3::numeric, 0, 'unpaid', $4::date)
-         ON CONFLICT (member_id, period) DO NOTHING
-         RETURNING id`,
-        [member.id, period, member.monthly_amount, dueDate]
-      )
-      if (result.rows[0]) generated += 1
-    }
-  }
-
-  const linkedResult = await pool.query(
-    `UPDATE transactions t
-        SET monthly_due_id = md.id
-       FROM monthly_dues md
-      WHERE t.member_id = md.member_id
-        AND date_trunc('month', t.date) = md.period
-        AND t.status::text = 'confirmed'
-        AND COALESCE(t.is_deleted, false) = false
-        AND t.monthly_due_id IS NULL
-        AND md.period >= make_date($1, 1, 1)
-        AND md.period < make_date($1 + 1, 1, 1)
-        AND EXISTS (
-              SELECT 1 FROM transaction_categories c
-               WHERE c.id = t.category_id AND c.type::text = 'income'
-            )
-      RETURNING t.id`,
-    [year]
-  )
-
-  const dueIds = await pool.query(
-    `SELECT id FROM monthly_dues
-      WHERE period >= make_date($1, 1, 1)
-        AND period < make_date($1 + 1, 1, 1)`,
-    [year]
-  )
-  for (const row of dueIds.rows) {
-    await pool.query(`SELECT public.recalculate_monthly_due($1::uuid)`, [row.id])
-  }
-
-  return {
-    year,
-    members: membersResult.rows.length,
-    generated,
-    linked: linkedResult.rows.length,
-    recalculated: dueIds.rows.length,
-  }
-}
-
 async function getDueDetail(pool, id) {
   if (typeof id !== 'string' || id.length < 1 || id.length > 100) throw new Error('Invalid due id')
 
@@ -554,10 +725,13 @@ async function getDueDetail(pool, id) {
 
   const txnResult = await pool.query(
     `SELECT t.id::text AS id, to_char(t.date, 'YYYY-MM-DD') AS date,
-            t.amount, tc.name AS category, t.receipt_number, t.status::text AS status
+            COALESCE(mdp.amount_paid, t.amount) AS amount,
+            tc.name AS category, t.receipt_number, t.status::text AS status
        FROM transactions t
        LEFT JOIN transaction_categories tc ON tc.id = t.category_id
-      WHERE t.monthly_due_id = $1::uuid
+       LEFT JOIN monthly_due_payments mdp
+         ON mdp.transaction_id = t.id::text AND mdp.monthly_due_id = $1::uuid
+      WHERE (t.monthly_due_id = $1::uuid OR mdp.monthly_due_id = $1::uuid)
         AND COALESCE(t.is_deleted, false) = false
       ORDER BY t.date ASC, t.created_at ASC`,
     [id]
@@ -621,10 +795,10 @@ async function getDuesMatrix(pool, searchParams) {
 
   const totalResult = await pool.query(
     `SELECT count(*) FILTER (
-              WHERE $2::text IS NULL
-                 OR p.full_name ILIKE '%' || $2 || '%'
-                 OR COALESCE(p.member_code, '') ILIKE '%' || $2 || '%'
-                 OR COALESCE(p.phone, '') ILIKE '%' || $2 || '%'
+              WHERE $1::text IS NULL
+                 OR p.full_name ILIKE '%' || $1 || '%'
+                 OR COALESCE(p.member_code, '') ILIKE '%' || $1 || '%'
+                 OR COALESCE(p.phone, '') ILIKE '%' || $1 || '%'
             )::int AS total,
             count(*)::int AS member_count
        FROM profiles p
@@ -635,13 +809,16 @@ async function getDuesMatrix(pool, searchParams) {
             AND COALESCE(p.is_deleted, false) = false)
           OR EXISTS (
             SELECT 1
-              FROM monthly_dues md
-             WHERE md.member_id = p.id
-               AND md.period >= make_date($1, 1, 1)
-               AND md.period < make_date($1 + 1, 1, 1)
+              FROM transactions t
+              JOIN transaction_categories tc ON tc.id = t.category_id
+             WHERE t.member_id = p.id
+               AND tc.type::text = 'income'
+               AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+               AND t.status::text = 'confirmed'
+               AND COALESCE(t.is_deleted, false) = false
           )
         )`,
-    [year, search || null]
+    [search || null]
   )
   const total = totalResult.rows[0].total
   const memberCount = totalResult.rows[0].member_count
@@ -657,19 +834,22 @@ async function getDuesMatrix(pool, searchParams) {
             AND COALESCE(p.is_deleted, false) = false)
           OR EXISTS (
             SELECT 1
-              FROM monthly_dues md
-             WHERE md.member_id = p.id
-               AND md.period >= make_date($1, 1, 1)
-               AND md.period < make_date($1 + 1, 1, 1)
+              FROM transactions t
+              JOIN transaction_categories tc ON tc.id = t.category_id
+             WHERE t.member_id = p.id
+               AND tc.type::text = 'income'
+               AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+               AND t.status::text = 'confirmed'
+               AND COALESCE(t.is_deleted, false) = false
           )
         )
-        AND ($2::text IS NULL
-          OR p.full_name ILIKE '%' || $2 || '%'
-          OR COALESCE(p.member_code, '') ILIKE '%' || $2 || '%'
-          OR COALESCE(p.phone, '') ILIKE '%' || $2 || '%')
+        AND ($1::text IS NULL
+          OR p.full_name ILIKE '%' || $1 || '%'
+          OR COALESCE(p.member_code, '') ILIKE '%' || $1 || '%'
+          OR COALESCE(p.phone, '') ILIKE '%' || $1 || '%')
       ORDER BY p.full_name ASC
-      LIMIT $3 OFFSET $4`,
-    [year, search || null, pageSize, (page - 1) * pageSize]
+      LIMIT $2 OFFSET $3`,
+    [search || null, pageSize, (page - 1) * pageSize]
   )
 
   const memberIds = membersResult.rows.map(row => row.id)
@@ -689,21 +869,85 @@ async function getDuesMatrix(pool, searchParams) {
       )
     : { rows: [] }
 
+  const startsResult = memberIds.length
+    ? await pool.query(
+        `WITH periods AS (
+           SELECT t.member_id, date_trunc('month', t.date)::date AS period
+             FROM transactions t
+             LEFT JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.member_id = ANY($1::uuid[])
+              AND NOT EXISTS (
+                SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+              )
+              AND (
+                t.monthly_due_id IS NOT NULL
+                OR (
+                  tc.type::text = 'income'
+                  AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+                )
+              )
+           UNION ALL
+           SELECT t.member_id, md.period
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+             JOIN transactions t ON t.id::text = mdp.transaction_id
+             JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.member_id = ANY($1::uuid[])
+         )
+         SELECT member_id::text AS member_id, to_char(MIN(period), 'YYYY-MM') AS first_period
+           FROM periods
+          GROUP BY member_id`,
+        [memberIds]
+      )
+    : { rows: [] }
+
   const paymentResult = memberIds.length
     ? await pool.query(
-        `SELECT t.member_id::text AS member_id,
-                MAX(t.date) AS last_payment_date,
-                COALESCE(SUM(t.amount), 0)::numeric AS total_paid
-           FROM transactions t
-           JOIN transaction_categories tc ON tc.id = t.category_id
-          WHERE tc.type::text = 'income'
-            AND t.status::text = 'confirmed'
-            AND COALESCE(t.is_deleted, false) = false
-            AND t.member_id = ANY($1::uuid[])
-            AND t.date >= make_date($2, 1, 1)
-            AND t.date < make_date($2 + 1, 1, 1)
-            AND t.monthly_due_id IS NOT NULL
-          GROUP BY t.member_id`,
+        `WITH payments AS (
+           SELECT t.member_id,
+                  EXTRACT(MONTH FROM t.date)::int AS month,
+                  t.amount::numeric AS amount_paid,
+                  t.date AS payment_date
+             FROM transactions t
+             JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.member_id = ANY($1::uuid[])
+              AND t.date >= make_date($2, 1, 1)
+              AND t.date < make_date($2 + 1, 1, 1)
+              AND NOT EXISTS (
+                SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+              )
+           UNION ALL
+           SELECT t.member_id,
+                  EXTRACT(MONTH FROM md.period)::int AS month,
+                  mdp.amount_paid,
+                  t.date AS payment_date
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+             JOIN transactions t ON t.id::text = mdp.transaction_id
+             JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.member_id = ANY($1::uuid[])
+              AND md.period >= make_date($2, 1, 1)
+              AND md.period < make_date($2 + 1, 1, 1)
+         )
+         SELECT member_id::text AS member_id, month,
+                COALESCE(SUM(amount_paid), 0)::numeric AS amount_paid,
+                to_char(MAX(payment_date), 'YYYY-MM-DD') AS last_payment_date
+           FROM payments
+          GROUP BY member_id, month`,
         [memberIds, year]
       )
     : { rows: [] }
@@ -721,11 +965,67 @@ async function getDuesMatrix(pool, searchParams) {
       waivedReason: row.waived_reason,
     }
   }
-  const paymentsByMember = new Map(paymentResult.rows.map(row => [row.member_id, row]))
+  const firstPeriodsByMember = new Map(
+    startsResult.rows.map(row => {
+      const [y, m] = row.first_period.split('-').map(Number)
+      return [row.member_id, y * 12 + (m - 1)]
+    })
+  )
+  const paymentsByMember = new Map()
+  for (const row of paymentResult.rows) {
+    if (!paymentsByMember.has(row.member_id)) paymentsByMember.set(row.member_id, {})
+    paymentsByMember.get(row.member_id)[row.month] = {
+      amountPaid: Number(row.amount_paid),
+      lastPaymentDate: row.last_payment_date,
+    }
+  }
 
   const members = membersResult.rows.map(row => {
-    const months = duesByMember.get(row.id) || {}
-    const payment = paymentsByMember.get(row.id)
+    const storedMonths = duesByMember.get(row.id) || {}
+    const firstPeriod = firstPeriodsByMember.get(row.id)
+    const currentDate = new Date()
+    const lastStoredMonth = Math.max(0, ...Object.keys(storedMonths).map(Number))
+    const lastVisibleMonth = year < currentDate.getFullYear()
+      ? 12
+      : year === currentDate.getFullYear()
+        ? Math.max(currentDate.getMonth() + 1, lastStoredMonth)
+        : lastStoredMonth
+    const firstMonth = firstPeriod === undefined
+      ? 13
+      : Math.max(1, firstPeriod - year * 12 + 1)
+    const payments = paymentsByMember.get(row.id) || {}
+    const months = {}
+
+    for (let month = firstMonth; month <= lastVisibleMonth; month++) {
+      const stored = storedMonths[month]
+      const amountDue = stored?.amountDue ?? Number(row.monthly_amount || 0)
+      const amountPaid = payments[month]?.amountPaid || 0
+      if (amountDue <= 0) continue
+      const status = stored?.status === 'waived'
+        ? 'waived'
+        : amountPaid >= amountDue
+          ? 'paid'
+          : amountPaid > 0
+            ? 'partial'
+            : 'unpaid'
+      const dueDate = stored?.dueDate || new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10)
+      months[month] = {
+        dueId: stored?.dueId || null,
+        month,
+        amountDue,
+        amountPaid,
+        status,
+        dueDate,
+        waivedReason: stored?.waivedReason || null,
+      }
+    }
+
+    const paymentRows = Object.values(payments)
+    const lastPaymentDate = paymentRows
+      .map(payment => payment.lastPaymentDate)
+      .filter(Boolean)
+      .sort()
+      .at(-1) || null
     const activeDues = Object.values(months).filter(m => m.status !== 'waived')
     const totalDue = activeDues.reduce((sum, m) => sum + m.amountDue, 0)
     const totalPaid = Object.values(months).reduce((sum, m) => sum + m.amountPaid, 0)
@@ -744,24 +1044,116 @@ async function getDuesMatrix(pool, searchParams) {
       totalDue,
       totalPaid,
       balance,
-      lastPaymentDate: payment?.last_payment_date || null,
-      transactionTotal: payment ? Number(payment.total_paid) : 0,
+      lastPaymentDate,
+      transactionTotal: totalPaid,
     }
   })
 
   const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
   const summaryResult = await pool.query(
-    `SELECT COALESCE(SUM(amount_due) FILTER (WHERE status::text <> 'waived'), 0)::numeric AS total_due,
+    `WITH starts AS (
+       SELECT member_id, MIN(period)::date AS first_period
+         FROM (
+           SELECT t.member_id, date_trunc('month', t.date)::date AS period
+             FROM transactions t
+             LEFT JOIN transaction_categories tc ON tc.id = t.category_id
+             JOIN profiles p ON p.id = t.member_id AND p.role::text = 'member'
+            WHERE t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.date < make_date($1 + 1, 1, 1)
+              AND NOT EXISTS (
+                SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+              )
+              AND (
+                t.monthly_due_id IS NOT NULL
+                OR (
+                  tc.type::text = 'income'
+                  AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+                )
+              )
+           UNION ALL
+           SELECT t.member_id, md.period
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+             JOIN transactions t ON t.id::text = mdp.transaction_id
+             JOIN transaction_categories tc ON tc.id = t.category_id
+             JOIN profiles p ON p.id = t.member_id AND p.role::text = 'member'
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND md.period < make_date($1 + 1, 1, 1)
+         ) member_periods
+        GROUP BY member_id
+     ),
+     due_periods AS (
+       SELECT starts.member_id, periods.period::date AS period
+         FROM starts
+         CROSS JOIN LATERAL generate_series(
+           GREATEST(starts.first_period, make_date($1, 1, 1)),
+           LEAST(
+             make_date($1 + 1, 1, 1) - INTERVAL '1 month',
+             date_trunc('month', CURRENT_DATE)::date
+           ),
+           INTERVAL '1 month'
+         ) AS periods(period)
+       UNION
+       SELECT md.member_id, md.period
+         FROM monthly_dues md
+        WHERE md.period >= make_date($1, 1, 1)
+          AND md.period < make_date($1 + 1, 1, 1)
+     ),
+     payment_totals AS (
+       SELECT member_id, period, SUM(amount_paid)::numeric AS amount_paid
+         FROM (
+           SELECT t.member_id, date_trunc('month', t.date)::date AS period,
+                  t.amount::numeric AS amount_paid
+             FROM transactions t
+             JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND t.date < make_date($1 + 1, 1, 1)
+              AND NOT EXISTS (
+                SELECT 1 FROM monthly_due_payments mdp WHERE mdp.transaction_id = t.id::text
+              )
+           UNION ALL
+           SELECT t.member_id, md.period, mdp.amount_paid
+             FROM monthly_due_payments mdp
+             JOIN monthly_dues md ON md.id = mdp.monthly_due_id
+             JOIN transactions t ON t.id::text = mdp.transaction_id
+             JOIN transaction_categories tc ON tc.id = t.category_id
+            WHERE tc.type::text = 'income'
+              AND regexp_replace(lower(btrim(tc.name)), 'hadiya$', 'hadya') = 'imam hadya'
+              AND t.status::text = 'confirmed'
+              AND COALESCE(t.is_deleted, false) = false
+              AND md.period < make_date($1 + 1, 1, 1)
+         ) payments
+        GROUP BY member_id, period
+     ),
+     monthly AS (
+       SELECT dp.member_id, dp.period,
+              COALESCE(md.amount_due, p.monthly_amount, 0)::numeric AS amount_due,
+              COALESCE(pt.amount_paid, 0)::numeric AS amount_paid,
+              COALESCE(md.status::text, 'unpaid') AS status
+         FROM due_periods dp
+         JOIN profiles p ON p.id = dp.member_id
+         LEFT JOIN monthly_dues md
+           ON md.member_id = dp.member_id AND md.period = dp.period
+         LEFT JOIN payment_totals pt
+           ON pt.member_id = dp.member_id AND pt.period = dp.period
+     )
+     SELECT COALESCE(SUM(amount_due) FILTER (WHERE status <> 'waived'), 0)::numeric AS total_due,
             COALESCE(SUM(amount_paid), 0)::numeric AS total_paid,
             COALESCE(
               SUM(GREATEST(amount_due - amount_paid, 0))
-                FILTER (WHERE status::text NOT IN ('paid', 'waived')),
+                FILTER (WHERE status NOT IN ('paid', 'waived')),
               0
             )::numeric AS balance
-       FROM monthly_dues
-      WHERE period >= make_date($1, 1, 1)
-        AND period < make_date($1 + 1, 1, 1)`,
+       FROM monthly
+      WHERE amount_due > 0`,
     [year]
   )
 
@@ -797,8 +1189,8 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') {
     const isMemberMutation = resource === 'members' && ['POST', 'PATCH', 'DELETE'].includes(req.method)
     const isTransactionMutation = resource === 'transactions' && ['PATCH', 'DELETE'].includes(req.method)
-    const isDuesGeneration = resource === 'dues' && req.method === 'POST'
-    if (!isMemberMutation && !isTransactionMutation && !isDuesGeneration) {
+    const isDuesRefresh = resource === 'dues-refresh' && req.method === 'POST'
+    if (!isMemberMutation && !isTransactionMutation && !isDuesRefresh) {
       res.status(405).json({ error: 'Method not allowed for this resource' })
       return
     }
@@ -809,12 +1201,10 @@ export default async function handler(req, res) {
 
     try {
       const pool = getPool()
-      if (isDuesGeneration) {
-        const year = Number(searchParams.get('year') || new Date().getFullYear())
-        if (!Number.isInteger(year) || year < 2000 || year > 2200) throw new Error('Invalid year')
-        const result = await generateMonthlyDues(pool, year)
+      if (isDuesRefresh) {
+        const result = await refreshMonthlyDues(pool)
         res.setHeader('Cache-Control', 'no-store')
-        res.status(200).json(result)
+        res.status(200).json({ success: true, ...result })
         return
       }
       const changed = isMemberMutation
@@ -837,8 +1227,26 @@ export default async function handler(req, res) {
         res.status(400).json({ error: error.message })
         return
       }
+      if (error instanceof Error && error.message === 'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required to create a member') {
+        res.status(503).json({ error: 'Member creation is unavailable because Supabase Auth is not configured.' })
+        return
+      }
+      if (error instanceof Error && error.message.startsWith('Failed to create member auth user')) {
+        res.status(502).json({ error: 'Supabase Auth could not create the member identity.' })
+        return
+      }
+      if (isMemberMutation && (error?.code === '42P10' || error?.code === '42703')) {
+        res.status(500).json({ error: 'The database is missing a required member or monthly-dues schema update. Run schema.sql in the Supabase SQL Editor.' })
+        return
+      }
       console.error('Admin data mutation error:', error)
-      res.status(500).json({ error: isMemberMutation ? 'Failed to save member.' : 'Failed to update transaction.' })
+      res.status(500).json({
+        error: isMemberMutation
+          ? 'Failed to save member.'
+          : isDuesRefresh
+            ? `Failed to refresh monthly dues from transactions: ${error instanceof Error ? error.message : 'Unknown database error'}`
+            : 'Failed to update transaction.',
+      })
     }
     return
   }

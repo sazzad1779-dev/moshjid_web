@@ -26,14 +26,16 @@ Browser (React/Vite)
    │
    ├─ /api/transactions   → GET  all transactions (public, CDN-cached 60s)
    ├─ /api/auth           → POST login / logout / verify (PIN → JWT cookie)
-   └─ /api/collectors     → GET  per-collector summary (auth required)
+   ├─ /api/collectors     → GET  per-collector summary (auth required)
+   └─ /api/admin-data     → GET  paginated admin data (admin session required)
           │
-          └─ PostgreSQL (Supabase)  ← single `transactions` table
+          └─ PostgreSQL (Supabase)  ← transactions, profiles, monthly_dues, categories
 ```
 
 - The frontend is built with Vite and served statically; the `api/*.js` handlers run as
   Vercel serverless functions in production.
-- The database is a single `transactions` table — schema in [`schema.sql`](schema.sql).
+- The database schema, including `transactions`, `profiles`, and `monthly_dues`, is in
+  [`schema.sql`](schema.sql).
 - Locally, `server.js` (Express) serves the same API handlers, and Vite proxies `/api`
   to it during development.
 
@@ -63,6 +65,9 @@ Browser (React/Vite)
    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions (date);
    CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions (type);
    ```
+
+   For an existing project, rerun the schema script to apply idempotent migrations,
+   including the `profiles.monthly_amount` column and monthly-dues index.
 
 3. Copy the pooled connection string from **Project Settings → Database → Connection
    string** — this is your `DATABASE_URL`.
@@ -165,12 +170,45 @@ Per-person totals computed from `transactions` where `amount > 0`:
   "totalRows": 1, "updatedAt": "..." }
 ```
 
+### `GET /api/admin-data` — admin session required
+
+Read-only admin data endpoint. Every request requires the `mosque_session` cookie and
+supports one `resource`:
+
+- `overview`: latest transactions, summary totals, member count, and category options.
+  Supports `q`, `type`, `category`, `from`, `to`, and `page`.
+- `transactions`: paginated transaction history. Supports `page`, `pageSize`, `q`,
+  and `type`.
+- `members`: paginated `profiles` with `role = 'member'`. Supports `page`, `pageSize`,
+  `q`, and `status`.
+- `dues`: paginated `monthly_dues` joined to `profiles` by `member_id`. Supports
+  `year`, `month` (1–12, or 0 for all months), `page`, and `pageSize`.
+- `dues-matrix`: member-by-month dues for a selected `year`, with optional member
+  `search`, `page`, and `pageSize`. A member's dues begin in the month of their first
+  confirmed income transaction in the `Imam Hadya` category (also accepting the
+  existing `Imam Hadiya` spelling) when a monthly amount is configured. Later months
+  through the current month are calculated for display. When creating or editing a
+  qualifying transaction, admins can select one or more due months and a year; the
+  payment is split across those months. If no month is selected, the transaction date
+  determines the due month. Explicit allocations are stored in `monthly_due_payments`;
+  date-based payments use the transaction's `monthly_due_id` link. Admins can `POST` to
+  `resource=dues-refresh` to process existing confirmed Imam Hadya transactions whose
+  `monthly_due_id` is null. The refresh creates or finds the due for each transaction's
+  month, links the transaction, and recalculates the linked due. Transactions already
+  linked or explicitly allocated are left alone.
+
+The response shape depends on the selected resource. `GET` requests only read data;
+admin transaction `PATCH` and `DELETE` requests update transactions and synchronize
+their associated Imam Hadya dues. The dues refresh endpoint only handles unlinked
+transactions; it does not delete transactions.
+
 ## Project structure
 
 ```
 api/             Vercel serverless functions (also served locally by server.js)
   _db.js         Postgres connection pool
   auth.js        PIN login → JWT cookie
+  admin-data.js  Paginated admin data (auth)
   transactions.js  Public transactions list
   collectors.js  Per-collector summary (auth)
 scripts/         (empty — reserved for data tools)

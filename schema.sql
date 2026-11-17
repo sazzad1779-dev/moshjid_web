@@ -37,9 +37,13 @@ CREATE TABLE IF NOT EXISTS profiles (
   address      text,
   avatar_url   text,
   joined_at    date         NOT NULL DEFAULT CURRENT_DATE,
+  monthly_amount numeric(12,2),
   created_at   timestamptz  NOT NULL DEFAULT NOW(),
   updated_at   timestamptz  NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE profiles
+  ADD COLUMN IF NOT EXISTS monthly_amount numeric(12,2);
 
 -- ── Monthly dues ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS monthly_dues (
@@ -54,6 +58,9 @@ CREATE TABLE IF NOT EXISTS monthly_dues (
   created_at    timestamptz NOT NULL DEFAULT NOW(),
   updated_at    timestamptz NOT NULL DEFAULT NOW()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_dues_member_period
+  ON monthly_dues (member_id, period);
 
 -- ── Transactions ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS transactions (
@@ -79,8 +86,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   CONSTRAINT fk_member      FOREIGN KEY (member_id)      REFERENCES profiles (id),
   CONSTRAINT fk_monthly_due FOREIGN KEY (monthly_due_id) REFERENCES monthly_dues (id),
   CONSTRAINT fk_collector   FOREIGN KEY (collector_id)   REFERENCES profiles (id),
-  CONSTRAINT fk_approved_by FOREIGN KEY (approved_by)    REFERENCES profiles (id),
-  CONSTRAINT member_or_donor CHECK (member_id IS NOT NULL OR donor_name IS NOT NULL)
+  CONSTRAINT fk_approved_by FOREIGN KEY (approved_by)    REFERENCES profiles (id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_transactions_date      ON transactions (date);
@@ -89,6 +95,44 @@ CREATE INDEX IF NOT EXISTS idx_transactions_status    ON transactions (status);
 CREATE INDEX IF NOT EXISTS idx_transactions_member    ON transactions (member_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_collector ON transactions (collector_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_receipt   ON transactions (receipt_number);
+
+CREATE TABLE IF NOT EXISTS monthly_due_payments (
+  transaction_id text NOT NULL,
+  monthly_due_id uuid NOT NULL REFERENCES monthly_dues (id) ON DELETE CASCADE,
+  amount_paid    numeric NOT NULL CHECK (amount_paid >= 0),
+  PRIMARY KEY (transaction_id, monthly_due_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_monthly_due_payments_due
+  ON monthly_due_payments (monthly_due_id);
+
+CREATE OR REPLACE FUNCTION public.recalculate_affected_dues()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF TG_OP = 'DELETE' OR (
+    TG_OP = 'UPDATE'
+    AND OLD.monthly_due_id IS DISTINCT FROM NEW.monthly_due_id
+  ) THEN
+    IF OLD.monthly_due_id IS NOT NULL
+       AND EXISTS (SELECT 1 FROM monthly_dues WHERE id = OLD.monthly_due_id) THEN
+      PERFORM public.recalculate_monthly_due(OLD.monthly_due_id);
+    END IF;
+  END IF;
+
+  IF TG_OP <> 'DELETE'
+     AND NEW.monthly_due_id IS NOT NULL
+     AND EXISTS (SELECT 1 FROM monthly_dues WHERE id = NEW.monthly_due_id) THEN
+    PERFORM public.recalculate_monthly_due(NEW.monthly_due_id);
+  END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
 -- ── Expenses ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS expenses (

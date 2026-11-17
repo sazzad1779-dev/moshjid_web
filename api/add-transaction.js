@@ -2,6 +2,7 @@ import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
 import { getEnumValues } from './_enum-values.js'
 import { getSecret, applyCors, readSessionToken } from './_security.js'
+import { syncMonthlyDueForTransaction } from './_monthly-dues.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -153,7 +154,7 @@ export default async function handler(req, res) {
   const session = await verifyAuth(req)
   if (!session) { res.status(401).json({ error: 'Unauthorized' }); return }
 
-  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId } = req.body || {}
+  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, dueMonths = [], dueYear } = req.body || {}
 
   if (!date || !type || !category || !amount || !enteredBy) {
     res.status(400).json({ error: 'Missing required fields' })
@@ -173,6 +174,24 @@ export default async function handler(req, res) {
   if (isNaN(parsedAmount) || parsedAmount <= 0) {
     res.status(400).json({ error: 'Invalid amount' })
     return
+  }
+  if (!Array.isArray(dueMonths) || dueMonths.length > 12
+      || dueMonths.some(month => !Number.isInteger(month) || month < 1 || month > 12)
+      || new Set(dueMonths).size !== dueMonths.length) {
+    res.status(400).json({ error: 'Invalid month selection' })
+    return
+  }
+  const selectedDuePeriods = []
+  if (dueMonths.length) {
+    const selectedYear = Number(dueYear)
+    if (!Number.isInteger(selectedYear) || selectedYear < 2000 || selectedYear > 2200) {
+      res.status(400).json({ error: 'Invalid month year' })
+      return
+    }
+    selectedDuePeriods.push(...dueMonths
+      .slice()
+      .sort((a, b) => a - b)
+      .map(month => `${selectedYear}-${String(month).padStart(2, '0')}-01`))
   }
 
   // Accept raw enum value or a form display label
@@ -214,25 +233,35 @@ export default async function handler(req, res) {
 
     const combinedNote = [description, notes].filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(' | ')
 
+    const client = await pool.connect()
     let inserted = null
-    for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
-      const receiptNumber = genReceiptNumber(prefix)
-      try {
-        const { rows } = await pool.query(
-          `INSERT INTO transactions
-             (date, category_id, amount, description, payment_method, status,
-              entered_by, collector_id, receipt_number, donor_name, member_id)
-           VALUES ($1::date, $2::uuid, $3::numeric, $4, $5::payment_method,
-                   'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
-           RETURNING id, receipt_number`,
-          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
-        )
-        inserted = rows[0]
-      } catch (err) {
-        // unique violation on receipt_number → retry with a fresh one
-        if (err.code === '23505' && attempt === 0) continue
-        throw err
+    try {
+      await client.query('BEGIN')
+      for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
+        const receiptNumber = genReceiptNumber(prefix)
+        try {
+          const { rows } = await client.query(
+            `INSERT INTO transactions
+               (date, category_id, amount, description, payment_method, status,
+                entered_by, collector_id, receipt_number, donor_name, member_id)
+             VALUES ($1::date, $2::uuid, $3::numeric, $4, $5::payment_method,
+                     'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
+             RETURNING id, receipt_number`,
+            [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
+          )
+          inserted = rows[0]
+        } catch (err) {
+          if (err.code === '23505' && attempt === 0) continue
+          throw err
+        }
       }
+      await syncMonthlyDueForTransaction(client, inserted.id, selectedDuePeriods)
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
     }
 
     res.status(201).json({ success: true, id: inserted.id, receiptNumber: inserted.receipt_number, memberId: selectedMemberId, newMember: isNewMember })

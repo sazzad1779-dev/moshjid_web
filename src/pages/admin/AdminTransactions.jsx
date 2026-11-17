@@ -6,6 +6,8 @@ import {
   EmptyState, PageTitle, Pagination, TransactionTable,
 } from './AdminShared.jsx'
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
 const EMPTY_TRANSACTION = {
   date: '',
   type: '',
@@ -14,6 +16,8 @@ const EMPTY_TRANSACTION = {
   note: '',
   paymentMethod: '',
   donorName: '',
+  dueMonths: [],
+  dueYear: '',
 }
 
 export default function AdminTransactions({ transactionForm }) {
@@ -90,7 +94,9 @@ export default function AdminTransactions({ transactionForm }) {
       amount: String(transaction.amount ?? ''),
       note: transaction.note || '',
       paymentMethod: transaction.paymentMethod || '',
-      donorName: transaction.donorName || '',
+      donorName: transaction.donorName || transaction.memberName || '',
+      dueMonths: transaction.dueMonths || [],
+      dueYear: transaction.dueYear || Number((transaction.date || '').slice(0, 4)),
     })
     setMutationError('')
     setMutationStatus('idle')
@@ -109,7 +115,14 @@ export default function AdminTransactions({ transactionForm }) {
         method: 'PATCH',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...editForm, id: editing.id, amount: Number(editForm.amount) }),
+        body: JSON.stringify({
+          ...editForm,
+          donorName: editForm.donorName === (editing.donorName || editing.memberName || '')
+            ? editing.donorName || ''
+            : editForm.donorName,
+          id: editing.id,
+          amount: Number(editForm.amount),
+        }),
       })
       const result = await response.json()
       if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`)
@@ -144,6 +157,7 @@ export default function AdminTransactions({ transactionForm }) {
   }
 
   const updateForm = (key, value) => setEditForm(current => ({ ...current, [key]: value }))
+  const isMonthlyDueCategory = editForm.type === 'income' && /^imam hadi?ya$/i.test(editForm.category.trim())
 
   return (
     <>
@@ -191,11 +205,17 @@ export default function AdminTransactions({ transactionForm }) {
             </div>
             <form onSubmit={saveEdit}>
               <div className="admin-form admin-form--transaction">
-                <label>Date<input type="date" required value={editForm.date} onChange={event => updateForm('date', event.target.value)} /></label>
-                <label>Type<select required disabled={metadataStatus !== 'ready'} value={editForm.type} onChange={event => { updateForm('type', event.target.value); updateForm('category', '') }}>{
+                <label>Date<input type="date" required value={editForm.date} onChange={event => {
+                  setEditForm(current => ({ ...current, date: event.target.value, dueYear: Number(event.target.value.slice(0, 4)) }))
+                }} /></label>
+                <label>Type<select required disabled={metadataStatus !== 'ready'} value={editForm.type} onChange={event => {
+                  setEditForm(current => ({ ...current, type: event.target.value, category: '', dueMonths: [] }))
+                }}>{
                   Array.from(new Set([...(metadata?.transactionTypes || []), editForm.type].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)
                 }</select></label>
-                <label>Category<select required disabled={metadataStatus !== 'ready'} value={editForm.category} onChange={event => updateForm('category', event.target.value)}>
+                <label>Category<select required disabled={metadataStatus !== 'ready'} value={editForm.category} onChange={event => {
+                  setEditForm(current => ({ ...current, category: event.target.value, dueMonths: [] }))
+                }}>
                   <option value="">— Select —</option>
                   {Array.from(new Set([
                     ...(metadata?.transactionCategories || [])
@@ -204,6 +224,43 @@ export default function AdminTransactions({ transactionForm }) {
                     ...(editForm.category ? [editForm.category] : []),
                   ])).map(name => <option key={name} value={name}>{name}</option>)}
                 </select></label>
+                {isMonthlyDueCategory && (
+                  <>
+                    <label className="admin-form--transaction-note">
+                      Monthly dues months (optional)
+                      <details className="admin-transaction-month-picker">
+                        <summary title={editForm.dueMonths.map(month => MONTH_NAMES[month - 1]).join(', ')}>
+                          {editForm.dueMonths.length
+                            ? `${editForm.dueMonths.length} month${editForm.dueMonths.length === 1 ? '' : 's'} selected`
+                            : 'Use transaction date month'}
+                        </summary>
+                        <div className="admin-transaction-month-options">
+                          {MONTH_NAMES.map((month, index) => {
+                            const monthNumber = index + 1
+                            return (
+                              <label key={month}>
+                                <input
+                                  type="checkbox"
+                                  checked={editForm.dueMonths.includes(monthNumber)}
+                                  onChange={event => updateForm('dueMonths', event.target.checked
+                                    ? [...editForm.dueMonths, monthNumber].sort((a, b) => a - b)
+                                    : editForm.dueMonths.filter(value => value !== monthNumber))}
+                                />
+                                {month}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </details>
+                      <small>{editForm.dueMonths.length
+                        ? 'Requires a linked member with a configured monthly amount. The total payment will be split across the selected months.'
+                        : 'If no month is selected, the transaction date month is used.'}</small>
+                    </label>
+                    {editForm.dueMonths.length > 0 && (
+                      <label>Year for selected months<input type="number" min="2000" max="2200" required value={editForm.dueYear} onChange={event => updateForm('dueYear', event.target.value)} /></label>
+                    )}
+                  </>
+                )}
                 <label>Amount (Taka)<input type="number" min="0.01" step="0.01" required value={editForm.amount} onChange={event => updateForm('amount', event.target.value)} /></label>
                 <label>Payment method<select required disabled={metadataStatus !== 'ready'} value={editForm.paymentMethod} onChange={event => updateForm('paymentMethod', event.target.value)}>{
                   Array.from(new Set([...(metadata?.paymentMethods || []), editForm.paymentMethod].filter(Boolean))).map(value => <option key={value} value={value}>{value}</option>)
