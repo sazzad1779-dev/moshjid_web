@@ -72,8 +72,8 @@ Browser (React/Vite)
    `settings.prayer_times` column. After migration, confirm all six times in
    **Admin → Settings** and select **Publish prayer times**.
 
-3. Copy the pooled connection string from **Project Settings → Database → Connection
-   string** — this is your `DATABASE_URL`.
+3. In the Supabase dashboard, open **Connect** and copy the **Transaction pooler**
+   connection string (port `6543`) for `DATABASE_URL`.
 
 Insert a few rows to test (dates as `YYYY-MM-DD`):
 
@@ -121,7 +121,7 @@ See [`.env.example`](.env.example) for a template.
 1. Push this folder to a GitHub repo.
 2. Go to vercel.com → **Add New Project** → import the repo. Vercel auto-detects Vite.
 3. Under **Settings → Environment Variables**, add:
-   - `DATABASE_URL` — your Supabase pooled connection string
+   - `DATABASE_URL` — your Supabase **Transaction pooler** connection string (port `6543`)
    - `ADMIN_SECRET` — a long random string (e.g. `openssl rand -base64 32`)
    - `ADMIN_PINS` / `COLLECTOR_PINS` — the PINs you want
    - (optional) `VITE_INCOME_FORM_URL`, `VITE_ADMIN_CONTACT_EMAIL`
@@ -233,5 +233,8 @@ vite.config.js   Vite config — /api proxied to :3001 in dev
 - **API returns `DATABASE_URL environment variable is not set`** — the env var is
   missing in the deployed environment. Add it in Vercel → Settings → Environment
   Variables and redeploy.
+- **API logs show `EMAXCONNSESSION`** — Supabase's session pooler has run out of
+  slots. Set Vercel's `DATABASE_URL` to the Transaction pooler URL from Supabase
+  and redeploy to apply the environment change.
 - **Login says "Invalid PIN"** — check `ADMIN_PINS` / `COLLECTOR_PINS` are set correctly
   (comma-separated, no spaces) in the environment.
