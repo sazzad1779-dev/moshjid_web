@@ -33,9 +33,22 @@ async function session(req, res) {
   if (!limit.allowed) return res.status(429).json({ error: 'Too many attempts. Try again later.' })
   const identity = typeof pin === 'string' ? pinIdentity(pin) : null
   if (!identity) return res.status(401).json({ error: 'Invalid PIN' })
-  const id = await resolveProfile(getPool(), identity.name, identity.role)
+  const pool = getPool()
+  const { rows: [existing] } = await pool.query(
+    `SELECT id FROM profiles
+      WHERE status::text = 'active' AND is_deleted = false
+        AND (($2 = 'admin' AND role::text IN ('admin', 'super_admin'))
+          OR ($2 = 'collector' AND role::text = 'collector' AND full_name = $1))
+      ORDER BY (full_name = $1) DESC, created_at, id LIMIT 1`,
+    [identity.name, identity.role]
+  )
+  const id = existing?.id || await resolveProfile(pool, identity.name, identity.role)
   const account = await profile(id)
-  if (!account || account.role !== identity.role) return res.status(403).json({ error: 'Your profile needs administrator review.' })
+  if (!account || (identity.role === 'admin'
+    ? !['admin', 'super_admin'].includes(account.role)
+    : account.role !== 'collector')) {
+    return res.status(403).json({ error: 'No active profile matches this PIN. Check the staff profile and PIN name mapping.' })
+  }
   const accessToken = await new SignJWT({ role: account.role, name: account.name })
     .setSubject(id).setAudience('mosque-mobile').setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt().setExpirationTime('8h').sign(new TextEncoder().encode(secret))
