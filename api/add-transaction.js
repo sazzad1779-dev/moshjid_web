@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { jwtVerify } from 'jose'
 import { getPool } from './_db.js'
 import { getEnumValues } from './_enum-values.js'
@@ -116,7 +117,7 @@ async function resolveCategoryId(pool, name, type) {
 
 async function getReceiptPrefix(pool) {
   try {
-    const { rows } = await pool.query('SELECT receipt_prefix FROM settings LIMIT 1')
+    const { rows } = await pool.query("SELECT to_jsonb(settings)->>'receipt_prefix' AS receipt_prefix FROM settings LIMIT 1")
     return rows[0]?.receipt_prefix || 'RCPT'
   } catch {
     return 'RCPT'
@@ -140,13 +141,16 @@ export default async function handler(req, res) {
   if (!session) { res.status(401).json({ error: 'Unauthorized' }); return }
   if (!['admin', 'super_admin', 'collector'].includes(session.role)) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, createMember = false, dueMonths = [], dueYear } = req.body || {}
+  return submitTransaction(req.body, res, session)
+}
+
+export async function submitTransaction(body, res, session, submission = null) {
+  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, createMember = false, dueMonths = [], dueYear } = body || {}
 
   if (!date || !type || !category || !amount || !enteredBy) {
     res.status(400).json({ error: 'Missing required fields' })
     return
   }
-  // Cloud schema requires every row to reference a member or carry a donor name
   const donor = String(donorName || '').trim()
   const isImamHadyaIncome = type === 'income' && typeof category === 'string' && /^imam hadi?ya$/i.test(category.trim())
   if (typeof createMember !== 'boolean' || (createMember && !donor)) {
@@ -158,11 +162,8 @@ export default async function handler(req, res) {
     res.status(400).json({ error: 'Invalid member' })
     return
   }
-  if (!selectedMemberId && !donor) {
-    // allow anonymous transactions without member/donor (member_id and donor_name both null is allowed by schema)
-  }
   const parsedAmount = parseFloat(String(amount).replace(/,/g, ''))
-  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+  if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
     res.status(400).json({ error: 'Invalid amount' })
     return
   }
@@ -200,35 +201,76 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool()
-    const [categoryTypes, enums, categoryId, prefix] = await Promise.all([
-      pool.query('SELECT DISTINCT type::text AS type FROM transaction_categories WHERE is_active = true'),
-      getEnumValues(pool, ['payment_method']),
-      resolveCategoryId(pool, category, type),
-      getReceiptPrefix(pool),
-    ])
-    if (!categoryTypes.rows.some(row => row.type === type)) throw new Error('Invalid type')
-    if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
-    const profileId = await resolveProfile(pool, collectorName, session.role)
+    let categoryId
+    let prefix
+    let profileId = session.id
+    if (!submission) {
+      categoryId = await resolveCategoryId(pool, category, type)
+      const enums = await getEnumValues(pool, ['payment_method'])
+      if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
+      prefix = await getReceiptPrefix(pool)
+      profileId = await resolveProfile(pool, collectorName, session.role)
+    }
     const collectorId = session.role === 'collector' ? profileId : null
-
     const combinedNote = [description, notes].filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(' | ')
 
+    const payloadHash = submission && createHash('sha256').update(JSON.stringify([
+      date, type, category, description, amount, paymentMethod, notes, donorName,
+      memberId, createMember, dueMonths, dueYear,
+    ])).digest('hex')
     const client = await pool.connect()
     let inserted = null
     let isNewMember = false
+    let response
     try {
       await client.query('BEGIN')
+      if (submission) {
+        const actor = await client.query(
+          `SELECT id FROM profiles WHERE id = $1 AND role::text = $2
+            AND status::text = 'active' AND is_deleted = false FOR SHARE`,
+          [profileId, session.role]
+        )
+        if (!actor.rowCount) {
+          await client.query('ROLLBACK')
+          return res.status(403).json({ error: 'Your staff access has changed. Sign in again.' })
+        }
+        const claim = await client.query(
+          `INSERT INTO mobile_submissions (actor_id, submission_id, payload_hash)
+           VALUES ($1, $2, $3) ON CONFLICT DO NOTHING RETURNING submission_id`,
+          [profileId, submission, payloadHash]
+        )
+        if (!claim.rowCount) {
+          const { rows: [previous] } = await client.query(
+            'SELECT payload_hash, result FROM mobile_submissions WHERE actor_id = $1 AND submission_id = $2',
+            [profileId, submission]
+          )
+          await client.query('COMMIT')
+          if (previous.payload_hash !== payloadHash) {
+            return res.status(409).json({ error: 'This submission ID already belongs to another payload.' })
+          }
+          return res.status(200).json(previous.result)
+        }
+      }
+      if (submission) {
+        categoryId = await resolveCategoryId(client, category, type)
+        const enums = await getEnumValues(client, ['payment_method'])
+        if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
+        const { rows } = await client.query("SELECT to_jsonb(settings)->>'receipt_prefix' AS receipt_prefix FROM settings LIMIT 1")
+        prefix = rows[0]?.receipt_prefix || 'RCPT'
+      }
       if (selectedMemberId) {
         const memberResult = await client.query(
           `SELECT id FROM profiles
             WHERE id = $1::uuid AND role::text = 'member'
-              AND status::text = 'active' AND is_deleted = false`,
-          [selectedMemberId]
+              AND status::text = 'active' AND is_deleted = false
+              AND ($2::uuid IS NULL OR collector_id = $2::uuid)
+            FOR SHARE`,
+          [selectedMemberId, submission ? collectorId : null]
         )
         if (!memberResult.rows[0]) throw new Error('Invalid member')
       }
       if (!selectedMemberId && donor && (isImamHadyaIncome || createMember)) {
-        const resolved = await resolveMemberProfile(client, donor)
+        const resolved = await resolveMemberProfile(client, donor, submission ? collectorId : null)
         selectedMemberId = resolved.id
         isNewMember = resolved.isNew
       }
@@ -242,12 +284,19 @@ export default async function handler(req, res) {
                    'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
            ON CONFLICT (receipt_number) DO NOTHING
            RETURNING id, receipt_number`,
-          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
+          [date, categoryId, submission ? amount : parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
         )
         inserted = rows[0]
       }
       if (!inserted) throw new Error('Could not allocate a unique receipt number')
       await syncMonthlyDueForTransaction(client, inserted.id, selectedDuePeriods)
+      response = { success: true, id: inserted.id, receiptNumber: inserted.receipt_number, memberId: selectedMemberId, newMember: isNewMember }
+      if (submission) {
+        await client.query(
+          'UPDATE mobile_submissions SET result = $3 WHERE actor_id = $1 AND submission_id = $2',
+          [profileId, submission, JSON.stringify(response)]
+        )
+      }
       await client.query('COMMIT')
     } catch (err) {
       await client.query('ROLLBACK')
@@ -256,13 +305,13 @@ export default async function handler(req, res) {
       client.release()
     }
 
-    res.status(201).json({ success: true, id: inserted.id, receiptNumber: inserted.receipt_number, memberId: selectedMemberId, newMember: isNewMember })
+    res.status(201).json(response)
   } catch (err) {
-    console.error('Add transaction error:', err)
     if (err instanceof Error && err.message.startsWith('Invalid ')) {
       res.status(400).json({ error: err.message })
       return
     }
+    console.error('Add transaction error:', err)
     res.status(500).json({ error: 'We couldn’t save the transaction.' })
   }
 }

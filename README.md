@@ -238,3 +238,25 @@ vite.config.js   Vite config — /api proxied to :3001 in dev
   and redeploy to apply the environment change.
 - **Login says "Invalid PIN"** — check `ADMIN_PINS` / `COLLECTOR_PINS` are set correctly
   (comma-separated, no spaces) in the environment.
+
+## Mobile API
+
+The standalone **Mosque Finance Mobile** Expo project uses `/api/mobile/v1`. The existing web PIN login continues to serve the website. Mobile staff sign in with Supabase Auth and an active staff profile.
+
+1. Compare the deployed schema with the API queries. The mobile API expects the same live tables, categories, profile IDs, soft-delete flags, and due-payment allocations used by the existing handlers.
+2. Apply `migrations/001_mobile_submissions.sql` to a staging Supabase database. The table stores retry keys and committed receipts for mobile submissions.
+3. Set `DATABASE_URL`, `SUPABASE_URL`, and `SUPABASE_ANON_KEY` in the backend environment. The last value can be the Supabase anon or publishable key. Deploy the backend before building the app against it.
+4. Provision Supabase email/password users whose Auth IDs match the appropriate active staff profiles. Set `profiles.collector_id` on the members each collector serves. Enabling email/password in Supabase for staff does not require making public account registration available.
+
+Mobile API requests select an operation with the `resource` query parameter.
+
+| Operation | Method | Access |
+|---|---|---|
+| `session` | POST | Email and password, or a refresh token |
+| `snapshot` | GET | Public fields for guests. Staff bearer tokens add authorized private data. A matching ETag returns 304. |
+| `transactions` | POST | Staff bearer token and a durable UUID submission ID |
+| `admin&target=members`, `admin&target=transactions`, `admin&target=dues-refresh` | Existing admin methods | Admin bearer token |
+| `admin&target=dues-matrix` | GET | Admin bearer token, with year and pagination options |
+| `prayer-times` | PATCH | Admin bearer token |
+
+Snapshot reads run in one repeatable-read PostgreSQL transaction. A fresh response replaces the downloaded copy on the phone, including records edited or removed through the web app. Uploads reuse the existing accounting write and monthly dues logic. The retry key, official receipt, and related ledger changes commit together.

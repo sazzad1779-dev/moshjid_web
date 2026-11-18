@@ -21,6 +21,8 @@ for (const [name, handler] of Object.entries(handlers)) {
   app.all(`/api/${name}`, handler)
 }
 
+app.all('/api/mobile/v1', (await import('./api/mobile/v1.js')).default)
+
 const PORT = 3001
 createServer(app).listen(PORT, () => {
   console.log(`API server running at http://localhost:${PORT}`)

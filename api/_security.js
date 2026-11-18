@@ -85,6 +85,7 @@ export function readSessionToken(req) {
 }
 
 export async function verifySession(req) {
+  if (req[mobileSession]) return req[mobileSession]
   const secret = getSecret()
   const token = readSessionToken(req)
   if (!secret || !token) return null
@@ -96,3 +97,6 @@ export async function verifySession(req) {
     return null
   }
 }
+
+// Set only by the mobile API after authentication and a live profile lookup.
+export const mobileSession = Symbol('verified mobile session')
