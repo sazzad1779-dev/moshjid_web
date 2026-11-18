@@ -10,7 +10,7 @@ export const INITIAL_SETTINGS = {
   welcomeText: 'Welcome to our mosque community.',
   announcement: 'Jummah prayer will be held at 1:30 PM this Friday.',
 }
-export const PAGE_SIZE = 8
+export const PAGE_SIZE = 20
 
 export { PageHeading as PageTitle }
 
@@ -43,10 +43,10 @@ export function EmptyState({ icon: Icon, title, description }) {
   )
 }
 
-export function TransactionTable({ transactions, compact = false, onEdit, onDelete, actionsDisabled = false }) {
+export function TransactionTable({ transactions, compact = false, onEdit, onDelete, actionsDisabled = false, scrollLabel }) {
   const canManage = !compact && (onEdit || onDelete)
   return (
-    <div className="admin-table-scroll">
+    <div className="admin-table-scroll" role={scrollLabel ? 'region' : undefined} aria-label={scrollLabel} tabIndex={scrollLabel ? 0 : undefined}>
       <table className="admin-table">
         <thead><tr><th>Date</th><th>Description</th><th>Category</th><th>Type</th><th className="admin-align-right">Amount</th>{canManage && <th className="admin-align-right">Actions</th>}</tr></thead>
         <tbody>{transactions.map((transaction, index) => (
@@ -68,9 +68,9 @@ export function Pagination({ page, pageCount, total, onChange, pageSize = PAGE_S
   const start = total ? (page - 1) * pageSize + 1 : 0
   const end = Math.min(page * pageSize, total)
   return (
-    <div className="admin-pagination">
+    <nav className="admin-pagination" aria-label="Table pagination">
       <span>Showing {start}–{end} of {total}</span>
-      <div><button aria-label="Previous page" disabled={page <= 1} onClick={() => onChange(page - 1)}><ChevronLeft size={17} /></button><span>Page {page} of {pageCount}</span><button aria-label="Next page" disabled={page >= pageCount} onClick={() => onChange(page + 1)}><ChevronRight size={17} /></button></div>
-    </div>
+      <div><button type="button" aria-label="Previous page" disabled={page <= 1} onClick={() => onChange(page - 1)}><ChevronLeft size={17} /></button><span>Page {page} of {pageCount}</span><button type="button" aria-label="Next page" disabled={page >= pageCount} onClick={() => onChange(page + 1)}><ChevronRight size={17} /></button></div>
+    </nav>
   )
 }

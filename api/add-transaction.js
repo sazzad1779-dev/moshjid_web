@@ -140,7 +140,7 @@ export default async function handler(req, res) {
   if (!session) { res.status(401).json({ error: 'Unauthorized' }); return }
   if (!['admin', 'super_admin', 'collector'].includes(session.role)) { res.status(403).json({ error: 'Forbidden' }); return }
 
-  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, dueMonths = [], dueYear } = req.body || {}
+  const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, createMember = false, dueMonths = [], dueYear } = req.body || {}
 
   if (!date || !type || !category || !amount || !enteredBy) {
     res.status(400).json({ error: 'Missing required fields' })
@@ -148,6 +148,11 @@ export default async function handler(req, res) {
   }
   // Cloud schema requires every row to reference a member or carry a donor name
   const donor = String(donorName || '').trim()
+  const isImamHadyaIncome = type === 'income' && typeof category === 'string' && /^imam hadi?ya$/i.test(category.trim())
+  if (typeof createMember !== 'boolean' || (createMember && !donor)) {
+    res.status(400).json({ error: 'Invalid member' })
+    return
+  }
   let selectedMemberId = memberId || null
   if (selectedMemberId && (typeof selectedMemberId !== 'string' || !/^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i.test(selectedMemberId))) {
     res.status(400).json({ error: 'Invalid member' })
@@ -222,7 +227,7 @@ export default async function handler(req, res) {
         )
         if (!memberResult.rows[0]) throw new Error('Invalid member')
       }
-      if (!selectedMemberId && donor) {
+      if (!selectedMemberId && donor && (isImamHadyaIncome || createMember)) {
         const resolved = await resolveMemberProfile(client, donor)
         selectedMemberId = resolved.id
         isNewMember = resolved.isNew

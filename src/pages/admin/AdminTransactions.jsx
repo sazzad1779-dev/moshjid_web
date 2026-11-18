@@ -7,7 +7,7 @@ import useMetadata from '../../hooks/useMetadata.js'
 import AdminActionDialog from './AdminActionDialog.jsx'
 import { getRequestErrorMessage, readJsonResponse } from '../../utils/requestErrors.js'
 import {
-  EmptyState, PageTitle, Pagination, TransactionTable,
+  EmptyState, PAGE_SIZE, PageTitle, Pagination, TransactionTable,
 } from './AdminShared.jsx'
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -45,10 +45,10 @@ export default function AdminTransactions({ transactionForm }) {
   const [editMemberSuggestions, setEditMemberSuggestions] = useState([])
   const [editMemberSearchStatus, setEditMemberSearchStatus] = useState('idle')
   const [editMemberSearchError, setEditMemberSearchError] = useState('')
-  const { data, status, error, refetch } = useAdminResource('transactions', { q: query, type, sort, page, pageSize: 10, member, dueMonth })
+  const { data, status, error, refetch } = useAdminResource('transactions', { q: query, type, sort, page, pageSize: PAGE_SIZE, member, dueMonth })
   const { data: metadata, status: metadataStatus, error: metadataError } = useMetadata()
   const transactions = data?.rows || []
-  const pageCount = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || 10)))
+  const pageCount = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || PAGE_SIZE)))
 
   useEffect(() => {
     const query = editMemberQuery.trim()
@@ -191,7 +191,7 @@ export default function AdminTransactions({ transactionForm }) {
       {status === 'loading' && <div className="admin-data-status" role="status">Loading transactions…</div>}
       {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>We couldn’t load the transaction list. {error}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
       {status === 'ready' && (
-        <section className="admin-panel">
+        <section className="admin-panel admin-list-panel">
           <form className="admin-toolbar" onSubmit={applySearch}>
             <label className="admin-search"><Search size={17} /><input value={queryInput} onChange={event => setQueryInput(event.target.value)} placeholder="Search description, member, or receipt..." /></label>
             <select aria-label="Filter transactions by type" disabled={metadataStatus !== 'ready'} value={type} onChange={event => { setType(event.target.value); setPage(1) }}><option value="all">All types</option>{(metadata?.transactionTypes || []).map(value => <option key={value} value={value}>{value}</option>)}</select>
@@ -203,7 +203,7 @@ export default function AdminTransactions({ transactionForm }) {
             <div className="admin-result-count">{data.total} records</div>
           </form>
           {transactions.length
-            ? <TransactionTable transactions={transactions} onEdit={startEditing} onDelete={setRemoving} />
+            ? <TransactionTable scrollLabel="Transactions table" transactions={transactions} onEdit={startEditing} onDelete={setRemoving} />
             : <EmptyState icon={ArrowLeftRight} title="No transactions found" description="There are no records matching these filters." />}
           <Pagination page={page} pageCount={pageCount} total={data.total} pageSize={data.pageSize} onChange={setPage} />
         </section>

@@ -1505,3 +1505,67 @@
   border-color: var(--tint-income-border);
   background: var(--tint-income);
 }
+
+.admin-content:has(> .admin-list-panel) {
+  display: flex;
+  flex-direction: column;
+  /* Match the main content area beneath the header and top padding. */
+  height: calc(100dvh - var(--header-height) - 44px);
+}
+
+.admin-list-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.admin-list-panel > :not(.admin-table-scroll) {
+  flex-shrink: 0;
+}
+
+.admin-list-panel > .admin-table-scroll {
+  flex: 1;
+  min-height: 180px;
+  overflow: auto;
+}
+
+.admin-list-panel > .admin-table-scroll > .admin-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.admin-list-panel > .admin-table-scroll > .admin-table > thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--c-surface-2);
+}
+
+.admin-list-panel > .admin-empty-state {
+  flex: 1;
+}
+
+.admin-list-panel > .admin-pagination {
+  flex-wrap: wrap;
+  min-height: 56px;
+  padding-block: 8px;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.admin-list-panel .admin-pagination button {
+  width: 36px;
+  height: 36px;
+}
+
+@media (max-width: 760px), (max-height: 660px) {
+  .admin-content:has(> .admin-list-panel) {
+    height: auto;
+  }
+
+  .admin-list-panel > .admin-table-scroll {
+    flex: auto;
+    height: max(220px, 60dvh);
+  }
+}

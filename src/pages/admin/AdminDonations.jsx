@@ -5,7 +5,7 @@ import useAdminResource from '../../hooks/useAdminResource.js'
 import { formatTaka } from '../../utils/formatters.js'
 import AdminActionDialog from './AdminActionDialog.jsx'
 import { readJsonResponse } from '../../utils/requestErrors.js'
-import { EmptyState, PageTitle, Pagination, StatCard } from './AdminShared.jsx'
+import { EmptyState, PAGE_SIZE, PageTitle, Pagination, StatCard } from './AdminShared.jsx'
 
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December']
 
@@ -13,7 +13,7 @@ export default function AdminDonations() {
   const [year, setYear] = useState(String(new Date().getFullYear()))
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const { data, status, error, refetch } = useAdminResource('dues-matrix', { year, page, pageSize: 25, search })
+  const { data, status, error, refetch } = useAdminResource('dues-matrix', { year, page, pageSize: PAGE_SIZE, search })
   const [selectedMember, setSelectedMember] = useState(null)
   const [refreshOpen, setRefreshOpen] = useState(false)
 
@@ -81,9 +81,9 @@ export default function AdminDonations() {
             <StatCard label="Total paid" value={formatTaka(data.summary.totalPaid)} note={year} icon={CircleDollarSign} tone="green" />
             <StatCard label="Outstanding" value={formatTaka(data.summary.balance)} note={year} icon={Wallet} tone="amber" />
           </div>
-          <section className="admin-panel">
+          <section className="admin-panel admin-list-panel">
             <div className="admin-panel-heading admin-donation-heading">
-              <div><h2>Monthly dues sheet</h2><p>Showing {members.length ? (page - 1) * data.pageSize + 1 : 0}–{Math.min(page * data.pageSize, data.total)} of {data.total} members · select a member for a full breakdown</p></div>
+              <div><h2>Monthly dues sheet</h2><p>Select a member for a full breakdown.</p></div>
               <div className="admin-donation-filters">
                 <label className="admin-select-label">Year<select value={year} onChange={changeYear}>{Array.from({ length: 7 }, (_, index) => String(new Date().getFullYear() - index)).map(option => <option key={option}>{option}</option>)}</select></label>
                 <button type="button" className="admin-button admin-button--quiet" onClick={() => setRefreshOpen(true)}>
@@ -152,55 +152,53 @@ export default function AdminDonations() {
             )}
 
             {members.length ? (
-              <>
-                <div className="admin-table-scroll">
-                  <table className="admin-table admin-donation-table">
-                    <thead>
-                      <tr>
-                        <th>Member</th>
-                        {monthNames.map(name => <th key={name} title={name}>{name.slice(0,3)}</th>)}
-                        <th className="admin-align-right">Balance</th>
-                        <th className="admin-align-right">Total paid</th>
+              <div className="admin-table-scroll" tabIndex={0} role="region" aria-label="Monthly dues table">
+                <table className="admin-table admin-donation-table">
+                  <thead>
+                    <tr>
+                      <th>Member</th>
+                      {monthNames.map(name => <th key={name} title={name}>{name.slice(0,3)}</th>)}
+                      <th className="admin-align-right">Balance</th>
+                      <th className="admin-align-right">Total paid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map(member => (
+                      <tr key={member.memberId}>
+                        <td>
+                          <button type="button" className="admin-dues-member-link" onClick={() => setSelectedMember(member)} aria-label={`View dues for ${member.memberName}`}>
+                            <span className="admin-avatar">{member.memberName.split(' ').map(part => part[0]).slice(0, 2).join('')}</span>
+                            <span><strong>{member.memberName}</strong><small className="admin-mono">{member.memberCode || member.memberId}</small></span>
+                          </button>
+                        </td>
+                        {monthNames.map((name, index) => {
+                          const monthNumber = index + 1
+                          const monthData = member.months[monthNumber]
+                          const balance = monthData && monthData.status !== 'paid' && monthData.status !== 'waived'
+                            ? Math.max(0, monthData.amountDue - monthData.amountPaid)
+                            : 0
+                          return (
+                            <td key={name} className="admin-dues-month-cell">
+                              {monthData ? (
+                                <div className="admin-dues-month-content" title={`${name}: ${monthData.status}${monthData.status === 'unpaid' ? '' : `, due ${formatTaka(monthData.amountDue)}, paid ${formatTaka(monthData.amountPaid)}`}${monthData.dueDate ? `, due date ${monthData.dueDate}` : ''}`}>
+                                  <span className={`admin-status admin-status--${monthData.status}`}>{monthData.status}</span>
+                                  {monthData.status !== 'unpaid' && (
+                                    <small>{monthData.status === 'waived' ? 'Waived' : monthData.status === 'paid' ? formatTaka(monthData.amountPaid) : `${formatTaka(balance)} left`}</small>
+                                  )}
+                                </div>
+                              ) : <span className="admin-dues-no-record" title={`No ${name} due record`}>—</span>}
+                            </td>
+                          )
+                        })}
+                        <td className="admin-align-right admin-dues-balance">{formatTaka(member.balance)}</td>
+                        <td className="admin-align-right admin-paid-amount">{formatTaka(member.totalPaid)}</td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {members.map(member => (
-                        <tr key={member.memberId}>
-                          <td>
-                            <button type="button" className="admin-dues-member-link" onClick={() => setSelectedMember(member)} aria-label={`View dues for ${member.memberName}`}>
-                              <span className="admin-avatar">{member.memberName.split(' ').map(part => part[0]).slice(0, 2).join('')}</span>
-                              <span><strong>{member.memberName}</strong><small className="admin-mono">{member.memberCode || member.memberId}</small></span>
-                            </button>
-                          </td>
-                          {monthNames.map((name, index) => {
-                            const monthNumber = index + 1
-                            const monthData = member.months[monthNumber]
-                            const balance = monthData && monthData.status !== 'paid' && monthData.status !== 'waived'
-                              ? Math.max(0, monthData.amountDue - monthData.amountPaid)
-                              : 0
-                            return (
-                              <td key={name} className="admin-dues-month-cell">
-                                {monthData ? (
-                                  <div className="admin-dues-month-content" title={`${name}: ${monthData.status}${monthData.status === 'unpaid' ? '' : `, due ${formatTaka(monthData.amountDue)}, paid ${formatTaka(monthData.amountPaid)}`}${monthData.dueDate ? `, due date ${monthData.dueDate}` : ''}`}>
-                                    <span className={`admin-status admin-status--${monthData.status}`}>{monthData.status}</span>
-                                    {monthData.status !== 'unpaid' && (
-                                      <small>{monthData.status === 'waived' ? 'Waived' : monthData.status === 'paid' ? formatTaka(monthData.amountPaid) : `${formatTaka(balance)} left`}</small>
-                                    )}
-                                  </div>
-                                ) : <span className="admin-dues-no-record" title={`No ${name} due record`}>—</span>}
-                              </td>
-                            )
-                          })}
-                          <td className="admin-align-right admin-dues-balance">{formatTaka(member.balance)}</td>
-                          <td className="admin-align-right admin-paid-amount">{formatTaka(member.totalPaid)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <Pagination page={page} pageCount={pageCount} total={data.total} pageSize={data.pageSize} onChange={setPage} />
-              </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : <EmptyState icon={CalendarDays} title={search ? 'No matching members' : 'No members found'} description={search ? 'Try another name, member code, or phone number.' : `There are no active members or recorded dues for ${year}.`} />}
+            <Pagination page={page} pageCount={pageCount} total={data.total} pageSize={data.pageSize} onChange={setPage} />
           </section>
         </>
       )}

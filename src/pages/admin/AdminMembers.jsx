@@ -6,7 +6,7 @@ import useMetadata from '../../hooks/useMetadata.js'
 import AdminActionDialog from './AdminActionDialog.jsx'
 import { getRequestErrorMessage, readJsonResponse } from '../../utils/requestErrors.js'
 import {
-  EmptyState, PageTitle, Pagination, StatusBadge,
+  EmptyState, PAGE_SIZE, PageTitle, Pagination, StatusBadge,
 } from './AdminShared.jsx'
 
 const EMPTY_MEMBER = {
@@ -32,10 +32,10 @@ export default function AdminMembers() {
   const [mutationError, setMutationError] = useState('')
   const [saveMessage, setSaveMessage] = useState('')
   const [removing, setRemoving] = useState(null)
-  const { data, status, error, refetch } = useAdminResource('members', { q: query, status: statusFilter, page, pageSize: 10 })
+  const { data, status, error, refetch } = useAdminResource('members', { q: query, status: statusFilter, page, pageSize: PAGE_SIZE })
   const { data: metadata, status: metadataStatus, error: metadataError } = useMetadata()
   const members = data?.rows || []
-  const pageCount = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || 10)))
+  const pageCount = Math.max(1, Math.ceil((data?.total || 0) / (data?.pageSize || PAGE_SIZE)))
   const memberRoles = (metadata?.userRoles || []).filter(role => role === 'member')
   const userStatuses = metadata?.userStatuses || []
   const selectedStatus = userStatuses.includes(memberForm.status) ? memberForm.status : userStatuses[0] || ''
@@ -142,7 +142,7 @@ export default function AdminMembers() {
       {status === 'loading' && <div className="admin-data-status" role="status">Loading member profiles…</div>}
       {status === 'error' && <div className="admin-data-status admin-data-status--error" role="alert"><span>We couldn’t load the members list. {error}</span><button type="button" className="admin-button admin-button--quiet" onClick={refetch}>Retry</button></div>}
       {status === 'ready' && (
-        <section className="admin-panel">
+        <section className="admin-panel admin-list-panel">
           <form className="admin-toolbar" onSubmit={applySearch}>
             <label className="admin-search"><Search size={17} /><input value={queryInput} onChange={event => setQueryInput(event.target.value)} placeholder="Search name, phone, email, or UUID..." /></label>
             <select aria-label="Filter members by status" value={statusFilter} onChange={changeStatus}><option value="all">All statuses</option>{userStatuses.map(value => <option key={value} value={value}>{value}</option>)}</select>
@@ -150,7 +150,7 @@ export default function AdminMembers() {
             <div className="admin-result-count">{data.total} members</div>
           </form>
           {members.length ? (
-            <div className="admin-table-scroll">
+            <div className="admin-table-scroll" tabIndex={0} role="region" aria-label="Members table">
               <table className="admin-table">
                 <thead><tr><th>Member</th><th>UUID</th><th>Phone</th><th>Email</th><th>Area</th><th>Address</th><th>Monthly amount</th><th>Joined</th><th>Status</th><th className="admin-align-right">Actions</th></tr></thead>
                 <tbody>{members.map(member => (

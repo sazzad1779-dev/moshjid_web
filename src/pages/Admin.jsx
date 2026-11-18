@@ -20,7 +20,7 @@ const DUE_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'Jul
 function TransactionForm({ enteredBy, onSaved }) {
   const { role } = useAuth()
   const today = new Date().toISOString().split('T')[0]
-  const empty = { date: today, type: 'income', category: '', description: '', amount: '', paymentMethod: '', notes: '', donorName: '', memberId: '', dueMonths: [], dueYear: Number(today.slice(0, 4)) }
+  const empty = { date: today, type: 'income', category: '', description: '', amount: '', paymentMethod: '', notes: '', donorName: '', memberId: '', createMember: false, dueMonths: [], dueYear: Number(today.slice(0, 4)) }
   const [form, setForm] = useState(empty)
   const [status, setStatus] = useState(null)
   const [errMsg, setErrMsg] = useState('')
@@ -130,7 +130,7 @@ function TransactionForm({ enteredBy, onSaved }) {
       const res = await fetch('/api/add-transaction', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, type: selectedType, paymentMethod: selectedPaymentMethod, enteredBy })
+        body: JSON.stringify({ ...form, createMember: !isMonthlyDueCategory && !form.memberId && !!form.donorName.trim() && form.createMember, type: selectedType, paymentMethod: selectedPaymentMethod, enteredBy })
       })
       const data = await readJsonResponse(res, 'We couldn’t save the transaction. Try again. If the problem continues, contact the site administrator.')
       setStatus('success')
@@ -254,7 +254,7 @@ function TransactionForm({ enteredBy, onSaved }) {
               onChange={e => {
                 set('donorName', e.target.value)
                 set('memberId', '')
-                          setMemberQuery(e.target.value)
+                setMemberQuery(e.target.value)
               }}
               {...inp()}
             />
@@ -269,7 +269,8 @@ function TransactionForm({ enteredBy, onSaved }) {
                     onClick={() => {
                       set('donorName', member.fullName)
                       set('memberId', member.id)
-                                      setMemberQuery('')
+                      set('createMember', false)
+                      setMemberQuery('')
                       setMemberSuggestions([])
                       setMemberSearchStatus('idle')
                     }}
@@ -285,6 +286,15 @@ function TransactionForm({ enteredBy, onSaved }) {
           {memberSearchStatus === 'ready' && !memberSuggestions.length && memberQuery.trim().length >= 2 && <small className="transaction-member-search-status">No active members match. You can enter a name manually.</small>}
           {memberSearchStatus === 'error' && <small className="transaction-member-search-status transaction-member-search-status--error" role="alert">{memberSearchError}</small>}
           {form.memberId && <small className="transaction-member-search-status">Selected member will be linked to this transaction.</small>}
+          {!isMonthlyDueCategory && !form.memberId && form.donorName.trim() && (
+            <label className="transaction-member-search-status" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={form.createMember} onChange={e => set('createMember', e.target.checked)} />
+              Create a member from this name
+            </label>
+          )}
+          {isMonthlyDueCategory && !form.memberId && form.donorName.trim() && (
+            <small className="transaction-member-search-status">Saving will use an active member with this name or create one if no match exists.</small>
+          )}
         </div>
 
         {isMonthlyDueCategory && (
