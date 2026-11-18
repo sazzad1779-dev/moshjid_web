@@ -1,3 +1,7 @@
+import { SignJWT, jwtVerify } from 'jose'
+import { pinIdentity } from '../auth.js'
+import { getSecret, rateLimitLogin, resetLoginRateLimit } from '../_security.js'
+import { resolveProfile } from '../add-transaction.js'
 import { createHash } from 'node:crypto'
 import { getPool } from '../_db.js'
 import { getEnumValues } from '../_enum-values.js'
@@ -9,17 +13,6 @@ import prayerTimes from '../prayer-times.js'
 const STAFF = ['collector', 'admin', 'super_admin']
 const UUID = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i
 
-async function supabaseAuth(path, options = {}) {
-  const url = process.env.SUPABASE_URL
-  const key = process.env.SUPABASE_ANON_KEY
-  if (!url || !key) throw new Error('Mobile authentication is missing its Supabase configuration')
-  return fetch(new URL('/auth/v1/' + path, url), {
-    ...options,
-    signal: AbortSignal.timeout(10000),
-    headers: { apikey: key, 'Content-Type': 'application/json', ...options.headers },
-  })
-}
-
 async function profile(id, db = getPool()) {
   if (!UUID.test(id || '')) return null
   const { rows: [row] } = await db.query(
@@ -30,41 +23,41 @@ async function profile(id, db = getPool()) {
 }
 
 async function session(req, res) {
-  const { email, password, refreshToken } = req.body || {}
-  const refresh = typeof refreshToken === 'string' && refreshToken.length > 0
-  if (!refresh && (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password)) {
-    return res.status(400).json({ error: 'Enter your staff email and password.' })
-  }
-  const response = await supabaseAuth('token?grant_type=' + (refresh ? 'refresh_token' : 'password'), {
-    method: 'POST',
-    body: JSON.stringify(refresh ? { refresh_token: refreshToken } : { email: email.trim(), password }),
-  })
-  if (response.status === 429) return res.status(429).json({ error: 'Too many attempts. Try again later.' })
-  if ([400, 401, 403].includes(response.status)) {
-    return res.status(401).json({ error: refresh ? 'Sign in again to resume syncing.' : 'Email or password is incorrect.' })
-  }
-  if (!response.ok) throw new Error('Supabase session request failed: ' + response.status)
-  const { access_token, refresh_token, user } = await response.json()
-  const account = await profile(user?.id)
-  if (!account) return res.status(403).json({ error: 'This account has no active staff profile.' })
-  return res.status(200).json({ account, accessToken: access_token, refreshToken: refresh_token })
+  const secret = getSecret()
+  if (!secret) throw new Error('ADMIN_SECRET is required')
+  const pin = req.body?.pin
+  const ip = process.env.VERCEL === '1'
+    ? String(req.headers['x-vercel-forwarded-for'] || '').split(',')[0].trim()
+    : req.socket?.remoteAddress || 'unknown'
+  const limit = rateLimitLogin(ip)
+  if (!limit.allowed) return res.status(429).json({ error: 'Too many attempts. Try again later.' })
+  const identity = typeof pin === 'string' ? pinIdentity(pin) : null
+  if (!identity) return res.status(401).json({ error: 'Invalid PIN' })
+  const id = await resolveProfile(getPool(), identity.name, identity.role)
+  const account = await profile(id)
+  if (!account || account.role !== identity.role) return res.status(403).json({ error: 'Your profile needs administrator review.' })
+  const accessToken = await new SignJWT({ role: account.role, name: account.name })
+    .setSubject(id).setAudience('mosque-mobile').setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt().setExpirationTime('8h').sign(new TextEncoder().encode(secret))
+  resetLoginRateLimit(ip)
+  return res.status(200).json({ account, accessToken })
 }
 
 async function authenticate(req, res) {
   const token = /^Bearer (\S+)$/i.exec(req.headers.authorization || '')?.[1]
-  if (!token) {
-    res.status(401).json({ error: 'Sign in to sync.' })
+  let id
+  try {
+    const secret = getSecret()
+    if (!secret || !token) throw new Error('Missing session')
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), { audience: 'mosque-mobile', algorithms: ['HS256'] })
+    id = payload.sub
+  } catch {
+    res.status(401).json({ error: 'Enter your PIN again to resume syncing.' })
     return null
   }
-  const response = await supabaseAuth('user', { headers: { Authorization: 'Bearer ' + token } })
-  if ([400, 401, 403].includes(response.status)) {
-    res.status(401).json({ error: 'Session expired.' })
-    return null
-  }
-  if (!response.ok) throw new Error('Supabase user lookup failed: ' + response.status)
-  const account = await profile((await response.json()).id)
+  const account = await profile(id)
   if (!account) {
-    res.status(403).json({ error: 'Your staff access has changed. Sign in again.' })
+    res.status(403).json({ error: 'Your staff access has changed.' })
     return null
   }
   return account

@@ -86,7 +86,7 @@ async function createAuthUser(name) {
   return data.id
 }
 
-async function resolveProfile(pool, name, role) {
+export async function resolveProfile(pool, name, role) {
   const found = await pool.query(
     'SELECT id FROM profiles WHERE full_name = $1 ORDER BY created_at DESC LIMIT 1',
     [name]

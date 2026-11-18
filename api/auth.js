@@ -46,6 +46,12 @@ function clearCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict${secure}; Max-Age=0`)
 }
 
+export function pinIdentity(pin) {
+  if (ADMIN_PINS.includes(pin)) return { role: 'admin', name: process.env.ADMIN_DEFAULT_NAME || 'Admin' }
+  if (COLLECTOR_PINS.includes(pin)) return { role: 'collector', name: COLLECTOR_PIN_NAMES[pin] || COLLECTOR_DEFAULT_NAME }
+  return null
+}
+
 export default async function handler(req, res) {
   applyCors(res, req)
   res.setHeader('Cache-Control', 'no-store')
