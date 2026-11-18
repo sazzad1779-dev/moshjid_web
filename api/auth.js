@@ -48,6 +48,7 @@ function clearCookie(res) {
 
 export default async function handler(req, res) {
   applyCors(res, req)
+  res.setHeader('Cache-Control', 'no-store')
 
   if (req.method === 'OPTIONS') {
     res.status(200).end()
@@ -76,7 +77,10 @@ export default async function handler(req, res) {
     }
 
     // Brute-force protection: limit attempts per IP.
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || 'unknown'
+    const forwardedIp = process.env.VERCEL === '1'
+      ? String(req.headers['x-vercel-forwarded-for'] || '').split(',')[0].trim()
+      : ''
+    const ip = forwardedIp || req.socket?.remoteAddress || 'unknown'
     const limit = rateLimitLogin(ip)
     if (!limit.allowed) {
       res.setHeader('Retry-After', String(limit.retryAfterSec))
@@ -95,10 +99,10 @@ export default async function handler(req, res) {
 
     const token = await new SignJWT({
       role,
-      iat: Date.now(),
       ...(role === 'collector' ? { name: COLLECTOR_PIN_NAMES[pin] || COLLECTOR_DEFAULT_NAME } : {})
     })
       .setProtectedHeader({ alg: 'HS256' })
+      .setIssuedAt()
       .setExpirationTime('8h')
       .sign(new TextEncoder().encode(secret))
 

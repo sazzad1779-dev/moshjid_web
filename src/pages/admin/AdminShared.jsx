@@ -52,7 +52,7 @@ export function TransactionTable({ transactions, compact = false, onEdit, onDele
         <tbody>{transactions.map((transaction, index) => (
           <tr key={transaction.id || `${transaction.date}-${index}`}>
             <td className="admin-nowrap">{formatDate(transaction.date)}</td>
-            <td><div className="admin-description">{transaction.note || '—'}</div>{(transaction.donorName || transaction.memberName) && <small className="admin-mono">{transaction.donorName || transaction.memberName}</small>}{transaction.id && <small className="admin-mono"> · #{transaction.id}</small>}</td>
+            <td><div className="admin-description">{transaction.note || '—'}</div>{(transaction.memberName || transaction.donorName) && <small className="admin-mono">{transaction.memberName || transaction.donorName}</small>}{transaction.id && <small className="admin-mono"> · #{transaction.id}</small>}</td>
             <td>{transaction.category || 'Uncategorized'}</td>
             <td><span className={`admin-type admin-type--${transaction.type || 'other'}`}>{transaction.type === 'income' ? <ArrowDownLeft size={14} /> : transaction.type === 'expense' ? <ArrowUpRight size={14} /> : <ArrowLeftRight size={14} />}{transaction.type || 'other'}</span></td>
             <td className={`admin-align-right admin-amount ${transaction.type === 'income' ? 'is-income' : transaction.type === 'expense' ? 'is-expense' : ''}`}>{formatTaka(transaction.amount)}</td>

@@ -32,7 +32,9 @@ export default function useAdminResource(resource, params = {}) {
     setResult(current => ({ ...current, status: 'loading', error: null }))
 
     fetchAdminResource(search)
-      .then(data => setResult({ data, status: 'ready', error: null }))
+      .then(data => {
+        if (active) setResult({ data, status: 'ready', error: null })
+      })
       .catch(error => {
         if (active) setResult(current => ({ ...current, status: 'error', error: getRequestErrorMessage(error) }))
       })

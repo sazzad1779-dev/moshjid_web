@@ -138,6 +138,7 @@ export default async function handler(req, res) {
 
   const session = await verifyAuth(req)
   if (!session) { res.status(401).json({ error: 'Unauthorized' }); return }
+  if (!['admin', 'super_admin', 'collector'].includes(session.role)) { res.status(403).json({ error: 'Forbidden' }); return }
 
   const { date, type, category, description, amount, paymentMethod, enteredBy, notes, donorName, memberId, dueMonths = [], dueYear } = req.body || {}
 
@@ -190,20 +191,20 @@ export default async function handler(req, res) {
       ? paymentMethod
       : ''
 
-  const collectorName = String(enteredBy).trim()
+  const collectorName = session.role === 'collector' ? String(session.name || 'Collector').trim() : String(enteredBy).trim()
 
   try {
     const pool = getPool()
-    const [categoryTypes, enums] = await Promise.all([
+    const [categoryTypes, enums, categoryId, prefix] = await Promise.all([
       pool.query('SELECT DISTINCT type::text AS type FROM transaction_categories WHERE is_active = true'),
       getEnumValues(pool, ['payment_method']),
+      resolveCategoryId(pool, category, type),
+      getReceiptPrefix(pool),
     ])
     if (!categoryTypes.rows.some(row => row.type === type)) throw new Error('Invalid type')
     if (!enums.payment_method.includes(method)) throw new Error('Invalid payment method')
-    const categoryId = await resolveCategoryId(pool, category, type)
     const profileId = await resolveProfile(pool, collectorName, session.role)
     const collectorId = session.role === 'collector' ? profileId : null
-    const prefix = await getReceiptPrefix(pool)
 
     const combinedNote = [description, notes].filter(value => typeof value === 'string' && value.trim()).map(value => value.trim()).join(' | ')
 
@@ -228,22 +229,19 @@ export default async function handler(req, res) {
       }
       for (let attempt = 0; attempt < 2 && !inserted; attempt++) {
         const receiptNumber = genReceiptNumber(prefix)
-        try {
-          const { rows } = await client.query(
-            `INSERT INTO transactions
-               (date, category_id, amount, description, payment_method, status,
-                entered_by, collector_id, receipt_number, donor_name, member_id)
-             VALUES ($1::date, $2::uuid, $3::numeric, $4, $5::payment_method,
-                     'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
-             RETURNING id, receipt_number`,
-            [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
-          )
-          inserted = rows[0]
-        } catch (err) {
-          if (err.code === '23505' && attempt === 0) continue
-          throw err
-        }
+        const { rows } = await client.query(
+          `INSERT INTO transactions
+             (date, category_id, amount, description, payment_method, status,
+              entered_by, collector_id, receipt_number, donor_name, member_id)
+           VALUES ($1::date, $2::uuid, $3::numeric, $4, $5::payment_method,
+                   'confirmed'::transaction_status, $6::uuid, $7::uuid, $8, $9, $10::uuid)
+           ON CONFLICT (receipt_number) DO NOTHING
+           RETURNING id, receipt_number`,
+          [date, categoryId, parsedAmount, combinedNote, method, profileId, collectorId, receiptNumber, selectedMemberId ? null : donor, selectedMemberId]
+        )
+        inserted = rows[0]
       }
+      if (!inserted) throw new Error('Could not allocate a unique receipt number')
       await syncMonthlyDueForTransaction(client, inserted.id, selectedDuePeriods)
       await client.query('COMMIT')
     } catch (err) {

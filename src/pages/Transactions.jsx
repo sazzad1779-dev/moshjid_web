@@ -125,7 +125,6 @@ export default function Transactions({ rows, summary, categories }) {
             { header: 'Category', key: 'category' },
             { header: 'Amount', key: 'amount', align: 'right',
               render: r => <strong style={{ color: r.type === 'income' ? COLORS.income : COLORS.expense }}>{formatTaka(r.amount)}</strong> },
-            { header: 'Note', key: 'note' },
           ]}
         />
 

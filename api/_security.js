@@ -46,9 +46,16 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000 // 15 minutes
 const LOGIN_MAX_ATTEMPTS = 5
 
 const loginAttempts = new Map() // ip -> { count, resetAt }
+let nextLoginCleanup = 0
 
 export function rateLimitLogin(ip) {
   const now = Date.now()
+  if (now >= nextLoginCleanup) {
+    for (const [key, attempt] of loginAttempts) {
+      if (attempt.resetAt <= now) loginAttempts.delete(key)
+    }
+    nextLoginCleanup = now + LOGIN_WINDOW_MS
+  }
   const entry = loginAttempts.get(ip)
 
   if (!entry || now >= entry.resetAt) {
@@ -73,7 +80,7 @@ export const COOKIE_NAME = 'mosque_session'
 
 export function readSessionToken(req) {
   const cookie = req.headers.cookie || ''
-  const match = cookie.match(new RegExp(`${COOKIE_NAME}=([^;]+)`))
+  const match = cookie.match(new RegExp(`(?:^|;\\s*)${COOKIE_NAME}=([^;]+)`))
   return match ? match[1] : null
 }
 

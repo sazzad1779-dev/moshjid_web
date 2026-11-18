@@ -37,7 +37,7 @@ export default async function handler(req, res) {
   try {
     const pool = getPool()
     const { rows } = await pool.query(
-      `SELECT t.id, t.date, tc.type AS type, tc.name AS category, t.amount, t.description AS note
+      `SELECT t.id, t.date, tc.type AS type, tc.name AS category, t.amount
        FROM transactions t
        LEFT JOIN transaction_categories tc ON tc.id = t.category_id
        WHERE t.is_deleted = false AND t.amount > 0
@@ -51,7 +51,6 @@ export default async function handler(req, res) {
       type: r.type || 'other',
       category: r.category || 'Uncategorized',
       amount: parseFloat(r.amount) || 0,
-      note: r.note || '',
     }))
 
     res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=300')

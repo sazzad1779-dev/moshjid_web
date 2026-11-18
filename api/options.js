@@ -30,7 +30,7 @@ export default async function handler(req, res) {
 
   try {
     const pool = getPool()
-    const enums = await getEnumValues(pool, [
+    const enumsPromise = getEnumValues(pool, [
       'payment_method',
       'transaction_status',
       'user_role',
@@ -39,22 +39,20 @@ export default async function handler(req, res) {
       'approval_status',
     ])
 
-    const categoriesResult = await pool.query(
+    const categoriesPromise = pool.query(
       `SELECT name, type::text AS type
          FROM transaction_categories
         WHERE is_active = true
         ORDER BY type, name`
     )
 
-    let areas = []
-    let areasError = ''
-    try {
-      const areasResult = await pool.query('SELECT id::text AS id, name FROM areas ORDER BY name')
-      areas = areasResult.rows
-    } catch (error) {
+    const areasPromise = pool.query('SELECT id::text AS id, name FROM areas ORDER BY name').catch(error => {
       console.error('Area options error:', error)
-      areasError = 'Could not load area options.'
-    }
+      return null
+    })
+    const [enums, categoriesResult, areasResult] = await Promise.all([enumsPromise, categoriesPromise, areasPromise])
+    const areas = areasResult?.rows || []
+    const areasError = areasResult ? '' : 'Could not load area options.'
 
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json({

@@ -89,7 +89,7 @@ function addTransactionFilters(searchParams, params) {
   if (q) {
     params.push(`%${q}%`)
     const index = params.length
-    clauses.push(`(t.description ILIKE $${index} OR t.donor_name ILIKE $${index} OR t.receipt_number ILIKE $${index} OR tc.name ILIKE $${index} OR p.full_name ILIKE $${index})`)
+    clauses.push(`(t.description ILIKE $${index} OR COALESCE(NULLIF(p.full_name, ''), t.donor_name) ILIKE $${index} OR t.receipt_number ILIKE $${index} OR tc.name ILIKE $${index})`)
   }
 
   return clauses.join(' AND ')
